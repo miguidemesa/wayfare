@@ -21,6 +21,8 @@ import { Card } from "@/components/ui/Surface";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Button } from "@/components/ui/Button";
 
+export { ErrorFallback as ErrorBoundary } from "@/components/ErrorFallback";
+
 export default function Login() {
   const { signIn, signUp } = useAuth();
   const insets = useSafeAreaInsets();

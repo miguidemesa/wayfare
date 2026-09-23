@@ -37,6 +37,8 @@ const MOODS = [
   { key: "photogenic", label: "Photogenic", icon: "camera-outline" },
 ];
 
+export { ErrorFallback as ErrorBoundary } from "@/components/ErrorFallback";
+
 export default function JournalScreen() {
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const insets = useSafeAreaInsets();

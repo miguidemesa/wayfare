@@ -17,12 +17,6 @@ export type DestinationTheme = {
   motifs: string[];
   env: DestinationEnv;
   tagline: string;
-  // Backward compatibility fields
-  glowA?: string;
-  glowB?: string;
-  deep?: string;
-  surface?: string;
-  accent2?: string;
 };
 
 export const TRAVEL_THEME = {
@@ -103,27 +97,6 @@ export const TRAVEL_THEME = {
   },
 };
 
-// Backward-compatible alias for existing imports
-export const OLED_COLORS = {
-  bg: TRAVEL_THEME.colors.bg,
-  bgElevated: TRAVEL_THEME.colors.surfaceWarm,
-  surfaceCard: TRAVEL_THEME.colors.surface,
-  surfaceFloating: TRAVEL_THEME.colors.surface,
-  surfaceActive: TRAVEL_THEME.colors.bgMuted,
-  borderSubtle: TRAVEL_THEME.colors.borderSubtle,
-  borderHighlight: TRAVEL_THEME.colors.border,
-  textPrimary: TRAVEL_THEME.colors.inkPrimary,
-  textSecondary: TRAVEL_THEME.colors.inkSecondary,
-  textMuted: TRAVEL_THEME.colors.inkMuted,
-  textDim: TRAVEL_THEME.colors.inkDim,
-  wayfareLime: TRAVEL_THEME.colors.forest,
-  wayfareMint: TRAVEL_THEME.colors.forest,
-  danger: TRAVEL_THEME.colors.danger,
-  success: TRAVEL_THEME.colors.success,
-  warning: TRAVEL_THEME.colors.warning,
-  info: TRAVEL_THEME.colors.info,
-};
-
 const THEMES: Record<string, DestinationTheme> = {
   japan: {
     key: "japan",
@@ -138,11 +111,6 @@ const THEMES: Record<string, DestinationTheme> = {
     motifs: ["sakura", "torii", "washi", "gardens"],
     env: "fuji",
     tagline: "Between ancient quiet and urban rhythm.",
-    glowA: "#C43C35",
-    glowB: "#2D5A4C",
-    accent2: "#2D5A4C",
-    deep: "#1C1917",
-    surface: "#FFFFFF",
   },
   italy: {
     key: "italy",
@@ -157,11 +125,6 @@ const THEMES: Record<string, DestinationTheme> = {
     motifs: ["travertine", "piazza", "espresso", "cypress"],
     env: "rome",
     tagline: "Golden stone and long Mediterranean afternoons.",
-    glowA: "#C2593F",
-    glowB: "#D48D3B",
-    accent2: "#D48D3B",
-    deep: "#1C1917",
-    surface: "#FFFFFF",
   },
   france: {
     key: "france",
@@ -176,11 +139,6 @@ const THEMES: Record<string, DestinationTheme> = {
     motifs: ["zinc rooftops", "bistro", "seine", "croissant"],
     env: "paris",
     tagline: "An editorial stroll through stone and zinc.",
-    glowA: "#2B4C6F",
-    glowB: "#A6596A",
-    accent2: "#A6596A",
-    deep: "#1C1917",
-    surface: "#FFFFFF",
   },
   philippines: {
     key: "philippines",
@@ -195,11 +153,6 @@ const THEMES: Record<string, DestinationTheme> = {
     motifs: ["capiz", "coastal breeze", "islands", "sunlight"],
     env: "tropics",
     tagline: "Warm waters, sea breeze, and vibrant island life.",
-    glowA: "#1A7A70",
-    glowB: "#DF7A32",
-    accent2: "#DF7A32",
-    deep: "#1C1917",
-    surface: "#FFFFFF",
   },
   korea: {
     key: "korea",
@@ -214,11 +167,6 @@ const THEMES: Record<string, DestinationTheme> = {
     motifs: ["hanok", "mountain mist", "tea houses", "night markets"],
     env: "hanok",
     tagline: "Mountain shrines meeting modern energy.",
-    glowA: "#2C4673",
-    glowB: "#C8523B",
-    accent2: "#C8523B",
-    deep: "#1C1917",
-    surface: "#FFFFFF",
   },
 };
 
@@ -246,11 +194,6 @@ const GENERIC: Record<string, DestinationTheme> = {
     motifs: ["ridgelines", "compass", "open sky"],
     env: "peaks",
     tagline: "Your next chapter begins here.",
-    glowA: "#2D5A4C",
-    glowB: "#2B4C6F",
-    accent2: "#2B4C6F",
-    deep: "#1C1917",
-    surface: "#FFFFFF",
   },
   midnight: { ...THEMES.korea, key: "generic", country: "", tagline: "Your next chapter begins here." },
   amber: { ...THEMES.italy, key: "generic", country: "", tagline: "Your next chapter begins here." },

@@ -188,7 +188,7 @@ export function SmartItineraryWizard({
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        className="flex-1 justify-end bg-black/80"
+        style={styles.modalOverlay}
       >
         <GlassView
           material="chrome"
@@ -204,13 +204,11 @@ export function SmartItineraryWizard({
           {/* Header Progress Tracker */}
           <View style={styles.topHeader}>
             <View>
-              <View className="flex-row items-center gap-2">
+              <View style={styles.eyebrowRow}>
                 <Ionicons name="sparkles" size={14} color={TRAVEL_THEME.colors.terracotta} />
-                <Text className="text-[10.5px] font-bold uppercase tracking-[0.2em] text-[#C2593F]">
-                  ITINERARY PLANNER
-                </Text>
+                <Text style={styles.eyebrowText}>ITINERARY PLANNER</Text>
               </View>
-              <Text className="mt-1 font-serif text-2xl text-[#1C1917]">
+              <Text style={styles.headerTitle}>
                 {step === 5 ? "Your Suggested Itinerary" : `Step ${step} of 4: Trip Preferences`}
               </Text>
             </View>
@@ -472,7 +470,7 @@ export function SmartItineraryWizard({
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.stepContent}>
               {/* Proposal Summary Metrics */}
               <GlassCard material="thin" borderRadius={24} padding={16}>
-                <View className="flex-row items-center justify-between">
+                <View style={styles.proposalHeaderRow}>
                   <View>
                     <Text style={styles.proposalBadge}>AI PROPOSAL READY</Text>
                     <Text style={styles.proposalTitle}>
@@ -678,6 +676,34 @@ function generateClientSideItinerary({
 }
 
 const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+  },
+  eyebrowRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  eyebrowText: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 2,
+    color: "#C2593F",
+  },
+  headerTitle: {
+    marginTop: 4,
+    fontFamily: "Georgia",
+    fontSize: 24,
+    color: "#1C1917",
+  },
+  proposalHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   modalBody: {
     maxHeight: "90%",
     padding: 20,

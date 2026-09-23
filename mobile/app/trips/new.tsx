@@ -42,6 +42,8 @@ const INTEREST_OPTIONS = [
   "Hidden Gems",
 ];
 
+export { ErrorFallback as ErrorBoundary } from "@/components/ErrorFallback";
+
 export default function NewTripScreen() {
   const insets = useSafeAreaInsets();
 

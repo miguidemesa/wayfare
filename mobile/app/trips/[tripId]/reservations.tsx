@@ -36,6 +36,8 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SheetHandle } from "@/components/GlassView";
 
+export { ErrorFallback as ErrorBoundary } from "@/components/ErrorFallback";
+
 export default function ReservationsScreen() {
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const insets = useSafeAreaInsets();

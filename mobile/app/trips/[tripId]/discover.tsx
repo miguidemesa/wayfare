@@ -43,6 +43,8 @@ const CATEGORY_CHIPS = [
   { key: "PARK", label: "Nature", icon: "leaf-outline" },
 ];
 
+export { ErrorFallback as ErrorBoundary } from "@/components/ErrorFallback";
+
 export default function DiscoverScreen() {
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const insets = useSafeAreaInsets();

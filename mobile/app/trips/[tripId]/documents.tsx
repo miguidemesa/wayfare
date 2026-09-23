@@ -36,6 +36,8 @@ const DOC_KINDS: { key: string; label: string; icon: keyof typeof Ionicons.glyph
   { key: "OTHER", label: "Other Doc", icon: "folder-outline", sensitive: false },
 ];
 
+export { ErrorFallback as ErrorBoundary } from "@/components/ErrorFallback";
+
 export default function DocumentsScreen() {
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const insets = useSafeAreaInsets();
@@ -183,7 +185,7 @@ export default function DocumentsScreen() {
             <EmptyState
               icon={<Ionicons name="wallet-outline" size={44} color={TRAVEL_THEME.colors.terracotta} />}
               title="Travel Wallet is empty"
-              description="Keep boarding passes, hotel vouchers, passport details, and travel insurance accessible offline in seconds."
+              description="Save quick reference notes for boarding passes, hotel vouchers, passport details, and travel insurance."
               actionLabel="+ Add Document"
               onAction={() => setModalVisible(true)}
             />

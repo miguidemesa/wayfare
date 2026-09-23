@@ -14,7 +14,7 @@ import {
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { addItineraryItem, api } from "@/shared/api";
+import { addItineraryItem, api, ApiError } from "@/shared/api";
 import { resolveDestinationTheme, fmtClock, fmtMoney, TABULAR_NUMS, TRAVEL_THEME } from "@/shared/theme";
 import type { TripBundle } from "@/shared/types";
 import { Header } from "@/components/Header";
@@ -48,6 +48,8 @@ const SUGGESTED_PROMPTS = [
   { label: "Curated dinner near hotel", icon: "restaurant-outline" },
   { label: "Scenic morning walking route", icon: "walk-outline" },
 ];
+
+export { ErrorFallback as ErrorBoundary } from "@/components/ErrorFallback";
 
 export default function AiScreen() {
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
@@ -182,8 +184,11 @@ export default function AiScreen() {
       }
       Alert.alert("Itinerary Updated!", `Applied ${prop.proposedItems.length} stops to Day 1 of your journey.`);
       loadBundle();
-    } catch {
-      Alert.alert("Notice", "Items added to your itinerary.");
+    } catch (e) {
+      Alert.alert(
+        "Couldn't apply this plan",
+        e instanceof ApiError ? e.message : "Some stops may not have saved. Please check your itinerary and try again."
+      );
       loadBundle();
     } finally {
       setApplyingProposal(false);
@@ -225,7 +230,7 @@ export default function AiScreen() {
                 <Ionicons name="sparkles" size={14} color={TRAVEL_THEME.colors.terracotta} />
                 <Text style={styles.briefingLabel}>TRAVEL BRIEFING · {briefing.city.toUpperCase()}</Text>
               </View>
-              <Badge label="LIVE" variant="forest" size="sm" />
+              <Badge label="TODAY" variant="forest" size="sm" />
             </View>
 
             <Text style={styles.greetingText}>

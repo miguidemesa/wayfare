@@ -43,6 +43,8 @@ const CATEGORIES: { key: string; label: string; icon: keyof typeof Ionicons.glyp
   { key: "MISC", label: "Other", icon: "cube-outline" },
 ];
 
+export { ErrorFallback as ErrorBoundary } from "@/components/ErrorFallback";
+
 export default function ExpensesScreen() {
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const insets = useSafeAreaInsets();

@@ -24,6 +24,8 @@ import { Badge } from "@/components/ui/Badge";
 
 const DENOMINATIONS = [100, 500, 1000, 2000, 5000, 10000, 50000];
 
+export { ErrorFallback as ErrorBoundary } from "@/components/ErrorFallback";
+
 export default function CurrencyScreen() {
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const insets = useSafeAreaInsets();

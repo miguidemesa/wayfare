@@ -33,6 +33,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 
+export { ErrorFallback as ErrorBoundary } from "@/components/ErrorFallback";
+
 export default function TripsScreen() {
   const { signOut } = useAuth();
   const insets = useSafeAreaInsets();

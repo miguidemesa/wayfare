@@ -43,6 +43,8 @@ const ITEM_TYPES: { key: string; label: string; icon: keyof typeof Ionicons.glyp
   { key: "PERSONAL", label: "Free Time", icon: "create-outline", color: TRAVEL_THEME.colors.inkSecondary },
 ];
 
+export { ErrorFallback as ErrorBoundary } from "@/components/ErrorFallback";
+
 export default function ItineraryScreen() {
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const insets = useSafeAreaInsets();

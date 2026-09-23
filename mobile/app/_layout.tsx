@@ -1,8 +1,12 @@
-import "../global.css";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider } from "@/lib/auth";
 import { TRAVEL_THEME } from "@/shared/theme";
+import { ErrorFallback } from "@/components/ErrorFallback";
+
+// expo-router renders this in place of any screen below the root layout
+// that throws during render — the last line of defense app-wide.
+export { ErrorFallback as ErrorBoundary };
 
 export default function RootLayout() {
   return (

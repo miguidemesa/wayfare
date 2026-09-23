@@ -32,6 +32,8 @@ import { Button } from "@/components/ui/Button";
 import { BottomNav } from "@/components/BottomNav";
 import { SmartItineraryWizard } from "@/components/SmartItineraryWizard";
 
+export { ErrorFallback as ErrorBoundary } from "@/components/ErrorFallback";
+
 export default function TripOverviewScreen() {
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const insets = useSafeAreaInsets();

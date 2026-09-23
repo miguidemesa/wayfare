@@ -26,6 +26,8 @@ import { BottomNav } from "@/components/BottomNav";
 import { Card, Surface } from "@/components/ui/Surface";
 import { Badge } from "@/components/ui/Badge";
 
+export { ErrorFallback as ErrorBoundary } from "@/components/ErrorFallback";
+
 export default function WrappedScreen() {
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const insets = useSafeAreaInsets();

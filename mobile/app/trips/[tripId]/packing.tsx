@@ -36,6 +36,8 @@ import { SheetHandle } from "@/components/GlassView";
 
 const CATEGORIES = ["Essentials", "Clothing", "Toiletries", "Electronics", "Documents", "Medication", "Other"];
 
+export { ErrorFallback as ErrorBoundary } from "@/components/ErrorFallback";
+
 export default function PackingScreen() {
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const insets = useSafeAreaInsets();
