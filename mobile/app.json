@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "Wayfare",
+    "slug": "wayfare",
+    "version": "0.1.0",
+    "scheme": "wayfare",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#0a0d12",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.wayfare.mobile"
+    },
+    "android": {
+      "package": "app.wayfare.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#0f766e"
+      }
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}

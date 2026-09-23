@@ -1,0 +1,292 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ------------------------------------------------------------------ tokens */
+:root {
+  --bg: #faf9f5;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f3f0e8;
+  --surface-3: #eae5d9;
+  --border: #e6e1d5;
+  --border-strong: #d3ccc0;
+  --ink: #14171d;
+  --ink-2: #434c5b;
+  --ink-3: #5f6c80;
+  --accent: #0f766e;
+  --accent-strong: #115e59;
+  --accent-soft: #ccfbf1;
+  --coral: #e11d48;
+  --amber: #b45309;
+  --sky: #0369a1;
+  --violet: #6d28d9;
+  --success: #047857;
+  --warning: #b45309;
+  --danger: #b91c1c;
+  --shadow-card: 0 1px 2px rgba(20, 23, 29, 0.03), 0 4px 16px -4px rgba(20, 23, 29, 0.05);
+  --shadow-pop: 0 16px 48px -12px rgba(20, 23, 29, 0.16), 0 4px 12px -2px rgba(20, 23, 29, 0.04);
+  --ring: #0f766e40;
+}
+
+.dark {
+  --bg: #0b0e14;
+  --bg-elevated: #11151e;
+  --surface: #141822;
+  --surface-2: #1a202d;
+  --surface-3: #222b3c;
+  --border: #232d3e;
+  --border-strong: #313e54;
+  --ink: #f0f2f5;
+  --ink-2: #9eaab9;
+  --ink-3: #758396;
+  --accent: #2dd4bf;
+  --accent-strong: #5eead4;
+  --accent-soft: #134e48;
+  --coral: #fb7185;
+  --amber: #fbbf24;
+  --sky: #38bdf8;
+  --violet: #a78bfa;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6);
+  --shadow-pop: 0 20px 56px -12px rgba(0, 0, 0, 0.75);
+  --ring: #2dd4bf40;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-coral: var(--coral);
+  --color-amber: var(--amber);
+  --color-sky: var(--sky);
+  --color-violet: var(--violet);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+
+  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-display: var(--font-instrument), "Newsreader", "Playfair Display", Georgia, serif;
+
+  --radius-card: 16px;
+
+  --animate-shimmer: shimmer 2s linear infinite;
+  --animate-fade-up: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-scale-in: scale-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* ------------------------------------------------------------------ base */
+html {
+  scroll-behavior: smooth;
+}
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.011em;
+}
+::selection {
+  background: var(--accent);
+  color: white;
+}
+*:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring);
+  border-radius: 6px;
+}
+
+/* Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ------------------------------------------------------------------ utilities */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+.dark .card {
+  box-shadow: 0 0 0 1px var(--border), 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+}
+.glass {
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+}
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--surface-3) 60%, transparent),
+    transparent
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+.tabular {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.text-gradient {
+  background: linear-gradient(135deg, var(--ink) 0%, var(--ink-2) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.text-gradient-accent {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--sky) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  scrollbar-width: none;
+}
+
+/* Leaflet theming */
+.leaflet-container {
+  background: var(--surface-2);
+  font-family: inherit;
+}
+.dark .leaflet-tile {
+  filter: brightness(0.72) saturate(0.85) contrast(1.05) hue-rotate(185deg) invert(0.94);
+}
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-pop);
+}
+.leaflet-popup-content {
+  margin: 10px 12px;
+  line-height: 1.45;
+}
+.leaflet-bar a {
+  background: var(--surface) !important;
+  color: var(--ink) !important;
+  border-color: var(--border) !important;
+}
+.wayfare-marker {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  font-size: 14px;
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.35);
+}
+.wayfare-marker.is-active {
+  border-color: var(--coral);
+  transform: scale(1.15);
+}
+
+/* Timeline connector */
+.timeline-rail {
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--border-strong) 12px,
+    var(--border-strong) calc(100% - 12px),
+    transparent
+  );
+}
+
+@media print {
+  .no-print { display: none !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ------------------------------------------------------------------ destination theming */
+
+/* CSS-only atmospheric drift for reduced-motion / low-power fallback */
+.dst-fallback-drift {
+  background:
+    radial-gradient(60% 50% at 30% 70%, rgba(255, 255, 255, 0.07) 0%, transparent 60%),
+    radial-gradient(50% 40% at 75% 30%, rgba(255, 255, 255, 0.05) 0%, transparent 55%);
+  animation: dst-drift 26s ease-in-out infinite alternate;
+}
+@keyframes dst-drift {
+  from { transform: translate3d(-2%, 1%, 0) scale(1); }
+  to { transform: translate3d(2%, -1.5%, 0) scale(1.06); }
+}
+
+/* Subtle destination texture inside themed scopes (washi / linen / marble feel) */
+.dst-scope {
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--dst-accent, transparent) 3%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 22px 22px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dst-fallback-drift { animation: none; }
+}
