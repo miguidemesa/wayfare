@@ -11,7 +11,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --conditions react-server --test src/lib/brief.test.ts src/lib/planner.test.ts src/lib/currency.test.ts src/lib/notifications.test.ts src/lib/ai/security.test.ts src/lib/calendar.test.ts",
+    "test": "tsx --conditions react-server --test src/lib/brief.test.ts src/lib/planner.test.ts src/lib/places/google.test.ts src/lib/currency.test.ts src/lib/notifications.test.ts src/lib/ai/security.test.ts src/lib/calendar.test.ts",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset --force && tsx prisma/seed.ts",

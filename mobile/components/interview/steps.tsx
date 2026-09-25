@@ -5,7 +5,18 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { ApiError, fetchStayAreas, searchCities, searchGuide, type GuidePlace, type Place, type StayArea } from "@/shared/api";
+import {
+  ApiError,
+  fetchStayAreas,
+  placeAutocomplete,
+  placeDetails,
+  searchCities,
+  searchGuide,
+  type GuidePlace,
+  type Place,
+  type PlacePrediction,
+  type StayArea,
+} from "@/shared/api";
 import { AVOIDS, DIETS, INTERESTS, type MustDo, type Pace, type Stay, type TripBrief } from "@/shared/brief";
 import { fmtClock, fmtDay, radii, space, useTheme } from "@/shared/theme";
 import { Button } from "@/components/ui/Button";
@@ -152,7 +163,9 @@ function blankStay(city: string): Stay {
   return { city, hotelName: null, hotelId: null, placeId: null, lat: null, lng: null, area: null, booked: false };
 }
 
-export function StayStep({ cities, stays, setBrief }: { cities: string[]; stays: Stay[]; setBrief: SetBrief }) {
+type LatLng = { lat: number; lng: number };
+
+export function StayStep({ cities, stays, setBrief, near }: { cities: string[]; stays: Stay[]; setBrief: SetBrief; near?: Record<string, LatLng> }) {
   function update(city: string, patch: Partial<Stay>) {
     setBrief((b) => {
       const existing = b.stays.find((s) => s.city === city) ?? blankStay(city);
@@ -163,13 +176,13 @@ export function StayStep({ cities, stays, setBrief }: { cities: string[]; stays:
   return (
     <View style={{ gap: space.xl }}>
       {cities.map((city) => (
-        <CityStay key={city} city={city} stay={stays.find((s) => s.city === city) ?? blankStay(city)} showCity={cities.length > 1} onChange={(p) => update(city, p)} />
+        <CityStay key={city} city={city} near={near?.[city] ?? null} stay={stays.find((s) => s.city === city) ?? blankStay(city)} showCity={cities.length > 1} onChange={(p) => update(city, p)} />
       ))}
     </View>
   );
 }
 
-function CityStay({ city, stay, showCity, onChange }: { city: string; stay: Stay; showCity: boolean; onChange: (patch: Partial<Stay>) => void }) {
+function CityStay({ city, near, stay, showCity, onChange }: { city: string; near: LatLng | null; stay: Stay; showCity: boolean; onChange: (patch: Partial<Stay>) => void }) {
   const [areas, setAreas] = useState<StayArea[] | null>(null);
   useEffect(() => {
     let live = true;
@@ -207,9 +220,21 @@ function CityStay({ city, stay, showCity, onChange }: { city: string; stay: Stay
         }}
       />
       {mode === "booked" ? (
-        <Field label="Hotel name" value={stay.hotelName ?? ""} onChangeText={(t) => onChange({ hotelName: t || null })} placeholder="e.g. Hotel Gracery Shinjuku" autoCapitalize="words" />
+        <PlaceSearchField
+          label="Hotel name"
+          kind="lodging"
+          city={city}
+          near={near}
+          value={stay.hotelName ?? ""}
+          located={stay.placeId ? (stay.area ?? city) : null}
+          placeholder="e.g. Hotel Gracery Shinjuku"
+          // Retyping after a pick means a different hotel: forget where the old one was.
+          onText={(t) => onChange({ hotelName: t || null, ...(stay.placeId ? { placeId: null, lat: null, lng: null, area: null } : {}) })}
+          onPick={(p) => onChange({ hotelName: p.name, placeId: p.placeId, lat: p.lat, lng: p.lng, area: p.neighborhood || null })}
+        />
       ) : null}
-      {mode ? (
+      {/* A hotel found on the map already says where the days start. */}
+      {mode && !(mode === "booked" && stay.placeId) ? (
         areas === null ? (
           <ActivityIndicator />
         ) : areas.length ? (
@@ -225,14 +250,140 @@ function CityStay({ city, stay, showCity, onChange }: { city: string; stay: Stay
             </T>
           </View>
         ) : (
-          <Field
-            label="Neighbourhood"
+          <PlaceSearchField
+            label={mode === "booked" ? "Which neighbourhood is it in?" : "Neighbourhood"}
+            kind="area"
+            city={city}
+            near={near}
             value={stay.area ?? ""}
-            onChangeText={(t) => onChange({ area: t || null })}
+            located={stay.lat != null ? stay.area : null}
             placeholder="Optional"
-            hint={`Wayfare doesn't have a map of ${city}'s areas yet, so this is kept as a note.`}
+            noSearchHint={`Wayfare doesn’t have a map of ${city}’s areas yet, so this is kept as a note.`}
+            onText={(t) => onChange({ area: t || null, lat: null, lng: null })}
+            onPick={(p) => onChange({ area: p.name, lat: p.lat, lng: p.lng })}
           />
         )
+      ) : null}
+    </View>
+  );
+}
+
+type Picked = { placeId: string; name: string; lat: number; lng: number; neighborhood: string };
+
+/**
+ * A name field that suggests matching places as you type, when Google
+ * Places is connected; otherwise it's just a field. Picking a suggestion
+ * gives the place a real location.
+ */
+function PlaceSearchField({
+  label,
+  kind,
+  city,
+  near,
+  value,
+  located,
+  placeholder,
+  noSearchHint,
+  onText,
+  onPick,
+}: {
+  label: string;
+  kind: "lodging" | "area";
+  city: string;
+  near: LatLng | null;
+  value: string;
+  /** Set when the value is a place on the map: shown as confirmation. */
+  located: string | null;
+  placeholder?: string;
+  noSearchHint?: string;
+  onText: (t: string) => void;
+  onPick: (p: Picked) => void;
+}) {
+  const { colors } = useTheme();
+  const [typed, setTyped] = useState("");
+  const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
+  const [google, setGoogle] = useState<boolean | null>(null);
+  const [picking, setPicking] = useState(false);
+
+  useEffect(() => {
+    const q = typed.trim();
+    if (q.length < 2 || google === false) {
+      setPredictions([]);
+      return;
+    }
+    let live = true;
+    const t = setTimeout(async () => {
+      try {
+        const r = await placeAutocomplete(q, kind, near);
+        if (!live) return;
+        setGoogle(r.google);
+        setPredictions(r.predictions.slice(0, 5));
+      } catch {
+        if (live) setPredictions([]);
+      }
+    }, 300);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [typed, kind, near, google]);
+
+  async function pick(p: PlacePrediction) {
+    setPicking(true);
+    try {
+      const d = await placeDetails(p.placeId, city);
+      onPick({ placeId: d.placeId, name: d.name, lat: d.lat, lng: d.lng, neighborhood: d.neighborhood === city ? "" : d.neighborhood });
+      setPredictions([]);
+      setTyped("");
+    } catch {
+      // Keep what they typed; it still works as a name.
+    } finally {
+      setPicking(false);
+    }
+  }
+
+  return (
+    <View style={{ gap: 6 }}>
+      <Field
+        label={label}
+        value={value}
+        onChangeText={(t) => {
+          setTyped(t);
+          onText(t);
+        }}
+        placeholder={placeholder}
+        autoCapitalize="words"
+        autoCorrect={false}
+        hint={google === false ? noSearchHint : undefined}
+      />
+      {picking ? <ActivityIndicator size="small" color={colors.ink3} style={{ alignSelf: "flex-start" }} /> : null}
+      {predictions.length ? (
+        <View style={{ borderWidth: 1, borderColor: colors.edge, borderRadius: radii.md, backgroundColor: colors.raised }}>
+          {predictions.map((p, i) => (
+            <Pressable
+              key={p.placeId}
+              onPress={() => void pick(p)}
+              accessibilityRole="button"
+              accessibilityLabel={`${p.name}, ${p.detail}`}
+              style={({ pressed }) => ({ paddingHorizontal: 14, paddingVertical: 11, borderTopWidth: i ? 1 : 0, borderTopColor: colors.rule, backgroundColor: pressed ? colors.sunk : "transparent" })}
+            >
+              <T v="bodyStrong">{p.name}</T>
+              {p.detail ? (
+                <T v="small" c="ink3">
+                  {p.detail}
+                </T>
+              ) : null}
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+      {located && !predictions.length ? (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Ionicons name="location" size={14} color={colors.positive} />
+          <T v="small" c="positive" style={{ flex: 1 }}>
+            On the map{located !== value ? ` · ${located}` : ""}. Wayfare plans each day starting near here.
+          </T>
+        </View>
       ) : null}
     </View>
   );
@@ -316,6 +467,7 @@ export function MustDoStep({ cities, mustDos, setBrief }: { cities: string[]; mu
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GuidePlace[]>([]);
   const [covered, setCovered] = useState<string[] | null>(null);
+  const [google, setGoogle] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -323,8 +475,11 @@ export function MustDoStep({ cities, mustDos, setBrief }: { cities: string[]; mu
       try {
         const r = await searchGuide(cities, query.trim());
         if (live) {
-          setResults(r.places.filter((p) => !mustDos.some((m) => m.poiId === p.poiId)).slice(0, query.trim() ? 8 : 5));
+          // Hide what's already on the list (matched by id: null never matches null).
+          const added = (p: GuidePlace) => mustDos.some((m) => (p.poiId != null && m.poiId === p.poiId) || (p.placeId != null && m.placeId === p.placeId));
+          setResults(r.places.filter((p) => !added(p)).slice(0, query.trim() ? 8 : 5));
           setCovered(r.covered);
+          setGoogle(!!r.google);
         }
       } catch {
         if (live) setResults([]);
@@ -341,7 +496,8 @@ export function MustDoStep({ cities, mustDos, setBrief }: { cities: string[]; mu
     setQuery("");
   };
   const remove = (i: number) => setBrief((b) => ({ ...b, mustDos: b.mustDos.filter((_, j) => j !== i) }));
-  const uncovered = covered ? cities.filter((c) => !covered.includes(c)) : [];
+  // With Google connected, searching covers every city.
+  const uncovered = covered && !google ? cities.filter((c) => !covered.includes(c)) : [];
 
   return (
     <View style={{ gap: space.md }}>
@@ -351,7 +507,7 @@ export function MustDoStep({ cities, mustDos, setBrief }: { cities: string[]; mu
           <View style={{ flex: 1 }}>
             <T v="bodyStrong">{m.name}</T>
             <T v="small" c="ink3">
-              {m.poiId ? [m.city, "From the guide: Wayfare will fit it in"].filter(Boolean).join(" · ") : "Your own: kept on your list"}
+              {m.poiId || m.placeId ? [m.city, `${m.poiId ? "From the guide" : "From Google"}: Wayfare will fit it in`].filter(Boolean).join(" · ") : "Your own: kept on your list"}
             </T>
           </View>
           <Pressable onPress={() => remove(i)} accessibilityRole="button" accessibilityLabel={`Remove ${m.name}`} hitSlop={12}>
@@ -374,8 +530,8 @@ export function MustDoStep({ cities, mustDos, setBrief }: { cities: string[]; mu
           </T>
           {results.map((p) => (
             <Pressable
-              key={p.poiId}
-              onPress={() => add({ name: p.name, city: p.city, poiId: p.poiId, placeId: null })}
+              key={p.poiId ?? p.placeId ?? p.name}
+              onPress={() => add({ name: p.name, city: p.city, poiId: p.poiId, placeId: p.placeId })}
               accessibilityRole="button"
               accessibilityLabel={`Add ${p.name}, ${p.neighborhood}`}
               style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, opacity: pressed ? 0.6 : 1 })}

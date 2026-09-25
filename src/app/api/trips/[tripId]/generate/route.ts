@@ -2,7 +2,9 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { requireTrip } from "@/lib/trip-access";
 import { handle, json, readJson } from "@/lib/api-helpers";
-import { generateItinerary, localDateKey, type PlannedDay } from "@/lib/planner";
+import { generateItinerary, localDateKey, mustDoPoiId, type PlannedDay } from "@/lib/planner";
+import { poisByCity, type Poi } from "@/lib/data/pois";
+import { cityPool, googleEnabled, placeDetails } from "@/lib/places/google";
 import { normalizeInterests, readStoredBrief } from "@/lib/brief";
 
 /**
@@ -108,11 +110,26 @@ export async function POST(req: Request, { params }: { params: Promise<{ tripId:
     ]);
     const rain: Record<string, number> = {};
     for (const w of weather) rain[`${w.city}|${localDateKey(w.date)}`] = w.rainProb;
+    const interests = brief ? brief.interests : normalizeInterests(JSON.parse(trip.interests || "[]"));
+
+    // Cities the curated guide doesn't know come from Google, when it's
+    // connected; must-dos picked from Google are looked up the same way.
+    const extraPois: Poi[] = [];
+    if (googleEnabled()) {
+      const uncovered = destinations.filter((d) => poisByCity(d.name).length === 0);
+      const pools = await Promise.all(
+        uncovered.map((d) => cityPool(d.name, d.lat || d.lng ? { lat: d.lat, lng: d.lng } : null, interests))
+      );
+      extraPois.push(...pools.flat());
+      const googleMust = (brief?.mustDos ?? []).filter((m) => !m.poiId && m.placeId && !extraPois.some((p) => p.id === `g:${m.placeId}`));
+      const found = await Promise.all(googleMust.map((m) => placeDetails(m.placeId!, m.city ?? cities[0])));
+      extraPois.push(...found.filter((p): p is Poi => p != null));
+    }
 
     const plan = generateItinerary({
       cities,
       dates,
-      interests: brief ? brief.interests : normalizeInterests(JSON.parse(trip.interests || "[]")),
+      interests,
       pace: body.pace ?? brief?.pace ?? (trip.pace as "relaxed" | "balanced" | "packed") ?? "balanced",
       currency: trip.homeCurrency,
       startLate: true,
@@ -124,12 +141,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ tripId:
         const start = r.dateTime.getHours() * 60 + r.dateTime.getMinutes();
         return { date: localDateKey(r.dateTime), start, end: start + 90 };
       }),
+      extraPois,
     });
 
     // Must-dos the plan couldn't place (not in the guide, or no room), so the
     // app can say so rather than let them silently vanish.
     const placed = new Set(plan.flatMap((d) => d.items.map((i) => i.poiId)));
-    const unplacedMustDos = (brief?.mustDos ?? []).filter((m) => !m.poiId || !placed.has(m.poiId)).map((m) => m.name);
+    const unplacedMustDos = (brief?.mustDos ?? []).filter((m) => !placed.has(mustDoPoiId(m))).map((m) => m.name);
 
     const totalTravelMin = plan.reduce((s, d) => s + d.estTravelMin, 0);
     const estCost = plan.reduce(

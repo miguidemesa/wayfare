@@ -35,6 +35,8 @@ export type PlannerInput = {
   rain?: Record<string, number>;
   /** Commitments already booked, to plan around. Minutes after midnight. */
   fixed?: { date: string; start: number; end: number }[];
+  /** Places from outside the curated guide (Google), for cities it doesn't cover. */
+  extraPois?: Poi[];
 };
 
 export type PlannedItem = {
@@ -237,11 +239,17 @@ function pickMeal(
  * Spread must-dos over their city's days: fewest must-dos first, and the
  * full days in the middle before the arrival and departure days.
  */
+/** A must-do's place: from the guide by poiId, or from Google by placeId. */
+export function mustDoPoiId(m: { poiId: string | null; placeId: string | null }): string | null {
+  return m.poiId ?? (m.placeId ? `g:${m.placeId}` : null);
+}
+
 function assignMustDos(input: PlannerInput, cityOrder: string[]): Map<number, Poi[]> {
   const byDay = new Map<number, Poi[]>();
   const last = cityOrder.length - 1;
   for (const m of input.brief?.mustDos ?? []) {
-    const poi = m.poiId ? poiById(m.poiId) : undefined;
+    const id = mustDoPoiId(m);
+    const poi = id ? (poiById(id) ?? input.extraPois?.find((p) => p.id === id)) : undefined;
     if (!poi) continue;
     const days = cityOrder.map((c, i) => (c === poi.city ? i : -1)).filter((i) => i >= 0);
     if (!days.length) continue;
@@ -263,15 +271,16 @@ export function generateItinerary(input: PlannerInput): PlannedDay[] {
   const avoid = new Set(brief?.avoid ?? []);
   const rhythm = brief?.rhythm ?? DEFAULT_RHYTHM;
   const diets = (brief?.food.diet ?? []).map((d) => d.replace("-", " "));
-  const mustIds = new Set((brief?.mustDos ?? []).map((m) => m.poiId).filter(Boolean) as string[]);
+  const mustIds = new Set((brief?.mustDos ?? []).map(mustDoPoiId).filter(Boolean) as string[]);
+  const poolFor = (city: string) => [...poisByCity(city), ...(input.extraPois ?? []).filter((p) => p.city === city)];
 
   // Sights and experiences, plus nightlife bars for evenings. Not meals, and
   // not the guide's "essentials" (convenience stores, pharmacies).
   const activities = input.cities
-    .flatMap(poisByCity)
+    .flatMap(poolFor)
     .filter((p) => p.category !== "ESSENTIAL" && (!isMeal(p) || (p.category === "BAR" && p.tags.includes("Nightlife"))));
   const restMap: Record<string, Poi[]> = {};
-  for (const c of input.cities) restMap[c] = poisByCity(c).filter((p) => p.category === "RESTAURANT" || p.category === "CAFE" || p.category === "BAR");
+  for (const c of input.cities) restMap[c] = poolFor(c).filter((p) => p.category === "RESTAURANT" || p.category === "CAFE" || p.category === "BAR");
 
   const usedActivities = new Set<string>();
   const usedRestaurants = new Set<string>();
@@ -412,7 +421,10 @@ export function generateItinerary(input: PlannerInput): PlannedDay[] {
       // Only claim "indoors" where the guide says so: not tagged outdoors
       // isn't the same as having a roof (temple grounds, shopping streets).
       if (rainy && p.category === "MUSEUM") bits.push("Indoors, with rain likely");
-      if (!bits.length) bits.push(`Rated ${p.rating.toFixed(1)} in the guide, and near your other stops`);
+      if (!bits.length) {
+        const source = p.id.startsWith("g:") ? "on Google" : "in the guide";
+        bits.push(p.rating > 0 ? `Rated ${p.rating.toFixed(1)} ${source}, and near your other stops` : "Near your other stops");
+      }
       return bits.join(" · ");
     };
     const mealReason = (kind: "Lunch" | "Dinner", pick: { poi: Poi; tried: string | null }) => {

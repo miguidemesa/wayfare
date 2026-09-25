@@ -41,6 +41,7 @@ function BriefEditor() {
 
   const { trip, destinations } = bundle!;
   const cities = useMemo(() => destinations.map((d) => d.name), [destinations]);
+  const near = useMemo(() => Object.fromEntries(destinations.filter((d) => d.lat || d.lng).map((d) => [d.name, { lat: d.lat, lng: d.lng }])), [destinations]);
   const stays = brief.stays.filter((s) => cities.includes(s.city));
   const dirty = JSON.stringify({ ...brief, stays }) !== JSON.stringify(initial);
   const start = dayKey(trip.startDate);
@@ -100,7 +101,7 @@ function BriefEditor() {
     >
       <View style={{ paddingHorizontal: GUTTER, gap: space.xxl, paddingBottom: space.xl }}>
         <Section title={cities.length === 1 ? `Where you’re staying in ${cities[0]}` : "Where you’re staying"}>
-          <StayStep cities={cities} stays={stays} setBrief={setBrief} />
+          <StayStep cities={cities} stays={stays} setBrief={setBrief} near={near} />
         </Section>
         <Section title="Who’s coming">
           <WhoStep party={brief.party} setBrief={setBrief} />

@@ -69,6 +69,8 @@ export default function NewTrip() {
   const setBrief = useCallback((fn: (b: TripBrief) => TripBrief) => setBriefState(fn), []);
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const cities = useMemo(() => draft.places.map((p) => p.name), [draft.places]);
+  // Stable between renders: place search re-runs whenever this changes.
+  const near = useMemo(() => Object.fromEntries(draft.places.map((p) => [p.name, { lat: p.lat, lng: p.lng }])), [draft.places]);
 
   // Start from what this traveller told us last time.
   useEffect(() => {
@@ -113,7 +115,7 @@ export default function NewTrip() {
       ask: cities.length === 1 ? `Where are you staying in ${cities[0]}?` : "Where are you staying?",
       why: "Each day starts and ends near your hotel, so this matters most.",
       answered: stayAnswered,
-      body: <StayStep cities={cities} stays={stays} setBrief={setBrief} />,
+      body: <StayStep cities={cities} stays={stays} setBrief={setBrief} near={near} />,
     },
     {
       key: "who",

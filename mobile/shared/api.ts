@@ -536,12 +536,32 @@ export function fetchStayAreas(city: string) {
   return api.get<{ areas: StayArea[] }>(`/api/places/areas?city=${encodeURIComponent(city)}`).then((r) => r.areas);
 }
 
-export type GuidePlace = { poiId: string; name: string; city: string; neighborhood: string; category: string; rating: number };
+/** From the curated guide (poiId) or, for cities it doesn't cover, Google (placeId). */
+export type GuidePlace = { poiId: string | null; placeId: string | null; name: string; city: string; neighborhood: string; category: string; rating: number };
 
-/** Search the place guide before a trip exists. `covered` = which of the cities it knows. */
+/** Search for places before a trip exists. `covered` = cities the guide knows; `google` = whether Google fills in the rest. */
 export function searchGuide(cities: string[], q: string) {
   const params = new URLSearchParams({ cities: cities.join(","), q });
-  return api.get<{ places: GuidePlace[]; covered: string[] }>(`/api/places?${params.toString()}`);
+  return api.get<{ places: GuidePlace[]; covered: string[]; google?: boolean }>(`/api/places?${params.toString()}`);
+}
+
+export type PlacePrediction = { placeId: string; name: string; detail: string };
+
+/** As-you-type hotel or neighbourhood search. `google: false` means type the name instead. */
+export function placeAutocomplete(q: string, kind: "lodging" | "area", near?: { lat: number; lng: number } | null) {
+  const params = new URLSearchParams({ q, kind });
+  if (near) {
+    params.set("lat", String(near.lat));
+    params.set("lng", String(near.lng));
+  }
+  return api.get<{ google: boolean; predictions: PlacePrediction[] }>(`/api/places/autocomplete?${params.toString()}`);
+}
+
+export function placeDetails(placeId: string, city: string) {
+  const params = new URLSearchParams({ placeId, city });
+  return api
+    .get<{ place: { placeId: string; name: string; lat: number; lng: number; neighborhood: string; address: string } }>(`/api/places/details?${params.toString()}`)
+    .then((r) => r.place);
 }
 
 // ------------------------------------------------------------ geocoding
