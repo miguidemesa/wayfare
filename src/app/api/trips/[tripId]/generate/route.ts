@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { requireTrip } from "@/lib/trip-access";
 import { handle, json, readJson } from "@/lib/api-helpers";
 import { generateItinerary, type PlannedDay } from "@/lib/planner";
+import { normalizeInterests } from "@/lib/brief";
 
 /**
  * AI itinerary generation.
@@ -99,7 +100,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ tripId:
     const plan = generateItinerary({
       cities,
       dates,
-      interests: JSON.parse(trip.interests || "[]"),
+      interests: normalizeInterests(JSON.parse(trip.interests || "[]")),
       pace: body.pace ?? (trip.pace as "relaxed" | "balanced" | "packed") ?? "balanced",
       currency: trip.homeCurrency,
       startLate: true,

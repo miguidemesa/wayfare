@@ -18,6 +18,7 @@ model User {
   name         String
   passwordHash String
   homeCurrency String    @default("PHP")
+  preferences  String? // JSON: reusable parts of the last trip brief (party, interests, pace…), to prefill the next
   createdAt    DateTime  @default(now())
   sessions     Session[]
   trips        Trip[]
@@ -51,6 +52,7 @@ model Trip {
   interests      String   @default("[]") // JSON string[]
   travelersCount Int      @default(1)
   notes          String?
+  brief          String? // JSON TripBrief (src/lib/brief.ts): the planning interview's answers
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

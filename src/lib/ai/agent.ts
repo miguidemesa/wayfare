@@ -3,6 +3,7 @@ import { db } from "../db";
 import { getProvider, type ChatMessage } from "./providers";
 import { runTool, toolDefsList, type ToolContext } from "./tools";
 import { runLocalBrain } from "./local-brain";
+import { normalizeInterests } from "../brief";
 
 const SYSTEM_BASE = `You are Wayfare AI — a proactive, grounded travel concierge embedded in a trip-planning app. You help the traveler manage ONE specific trip.
 
@@ -39,7 +40,7 @@ async function buildSystemPrompt(ctx: ToolContext): Promise<string> {
       budget: trip.budgetAmount,
       homeCurrency: trip.homeCurrency,
       pace: trip.pace,
-      interests: JSON.parse(trip.interests || "[]"),
+      interests: normalizeInterests(JSON.parse(trip.interests || "[]")),
     },
     itinerarySummary: days.map((d) => ({
       date: d.date.toISOString().slice(0, 10),

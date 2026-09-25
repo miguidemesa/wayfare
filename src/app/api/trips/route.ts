@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { handle, json, readJson } from "@/lib/api-helpers";
 import { listTrips } from "@/lib/trip-service";
 import { statusForDates } from "@/lib/types";
+import { normalizeInterests, parseBrief, partySize, preferencesFrom, type TripBrief } from "@/lib/brief";
 
 export async function GET() {
   return handle(async () => {
@@ -27,6 +28,8 @@ type CreateBody = {
   pace?: string;
   interests?: string[];
   travelersCount?: number;
+  /** The planning interview's answers (src/lib/brief.ts). */
+  brief?: unknown;
   coverEmoji?: string;
   coverTheme?: string;
 };
@@ -42,6 +45,12 @@ export async function POST(req: Request) {
     const end = new Date(body.endDate + "T23:59:59");
     if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) {
       return json({ error: "Invalid date range" }, 400);
+    }
+    let brief: TripBrief | null = null;
+    if (body.brief !== undefined) {
+      const parsed = parseBrief(body.brief);
+      if (!parsed.ok) return json({ error: parsed.error }, 400);
+      brief = parsed.brief;
     }
     const dests = (body.destinations ?? []).filter((d) => d.name?.trim());
     if (!dests.length) return json({ error: "At least one destination is required" }, 400);
@@ -60,9 +69,12 @@ export async function POST(req: Request) {
         endDate: end,
         budgetAmount: Number(body.budgetAmount) || 0,
         homeCurrency: body.homeCurrency ?? user.homeCurrency,
-        pace: body.pace ?? "balanced",
-        interests: JSON.stringify((body.interests ?? []).slice(0, 12)),
-        travelersCount: Math.max(1, Math.min(20, Number(body.travelersCount) || 1)),
+        // With a brief, it is the source of truth; pace, interests and the
+        // head count mirror it for everything that reads the older fields.
+        pace: brief?.pace ?? body.pace ?? "balanced",
+        interests: JSON.stringify(brief ? brief.interests : normalizeInterests(body.interests).slice(0, 12)),
+        travelersCount: Math.min(30, brief ? partySize(brief) : Math.max(1, Number(body.travelersCount) || 1)),
+        brief: brief ? JSON.stringify(brief) : null,
         destinations: {
           create: dests.map((d, i) => ({
             name: d.name.trim(),
@@ -78,6 +90,9 @@ export async function POST(req: Request) {
       },
       include: { destinations: true },
     });
+    if (brief) {
+      await db.user.update({ where: { id: user.id }, data: { preferences: JSON.stringify(preferencesFrom(brief)) } });
+    }
 
     return json({ trip }, 201);
   });

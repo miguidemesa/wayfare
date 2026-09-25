@@ -4,6 +4,7 @@ import { handle, json, readJson } from "@/lib/api-helpers";
 import { getTripBundle } from "@/lib/trip-service";
 import { getWeatherForTrip } from "@/lib/weather";
 import { CITY_META } from "@/lib/data/pois";
+import { normalizeInterests, parseBrief, partySize, preferencesFrom, readStoredBrief } from "@/lib/brief";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ tripId: string }> }) {
   return handle(async () => {
@@ -25,7 +26,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ tripId:
         orderBy: { date: "asc" },
       });
     }
-    return json(bundle);
+    return json({ ...bundle, brief: readStoredBrief(bundle.trip.brief) });
   });
 }
 
@@ -46,6 +47,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ tripId
       notes?: string | null;
       startDate?: string;
       endDate?: string;
+      /** A whole TripBrief; replaces the stored one. */
+      brief?: unknown;
     }>(req);
 
     const trip = await db.trip.findFirst({ where: { id: tripId, userId: user.id } });
@@ -59,7 +62,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ tripId
     if (body.budgetAmount != null) patch.budgetAmount = Math.max(0, Number(body.budgetAmount) || 0);
     if (body.homeCurrency != null) patch.homeCurrency = body.homeCurrency;
     if (body.pace != null) patch.pace = body.pace;
-    if (body.interests != null) patch.interests = JSON.stringify(body.interests);
+    if (body.interests != null) patch.interests = JSON.stringify(normalizeInterests(body.interests));
     if (body.status != null) patch.status = body.status;
     // undefined leaves notes alone; null or "" clears them.
     if (body.notes !== undefined) patch.notes = body.notes?.trim() || null;
@@ -74,7 +77,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ tripId
       if (body.endDate) patch.endDate = e;
     }
 
+    let savedPreferences: string | null = null;
+    if (body.brief !== undefined) {
+      const parsed = parseBrief(body.brief);
+      if (!parsed.ok) return json({ error: parsed.error }, 400);
+      const brief = parsed.brief;
+      patch.brief = JSON.stringify(brief);
+      patch.pace = brief.pace;
+      patch.interests = JSON.stringify(brief.interests);
+      patch.travelersCount = Math.min(30, partySize(brief));
+      savedPreferences = JSON.stringify(preferencesFrom(brief));
+    }
+
     const updated = await db.trip.update({ where: { id: tripId }, data: patch });
+    if (savedPreferences) await db.user.update({ where: { id: user.id }, data: { preferences: savedPreferences } });
     return json({ trip: updated });
   });
 }

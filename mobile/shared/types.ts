@@ -1,3 +1,5 @@
+import type { TripBrief } from "./brief";
+
 // Shared data types for the mobile app — mirrors the JSON the Wayfare API
 // returns (Prisma Dates serialize as ISO strings over the wire).
 
@@ -211,6 +213,8 @@ export type TripBundle = {
     travelersCount: number;
     notes?: string | null;
   };
+  /** The planning interview's answers; null for trips planned before it existed. */
+  brief: TripBrief | null;
   destinations: Destination[];
   hotels: Hotel[];
   flights: Flight[];
@@ -256,6 +260,8 @@ export type CreateTripPayload = {
   pace?: "relaxed" | "balanced" | "packed";
   interests?: string[];
   travelersCount?: number;
+  /** When given, the server takes pace, interests and head count from it. */
+  brief?: TripBrief;
   coverEmoji?: string;
   coverTheme?: string;
 };

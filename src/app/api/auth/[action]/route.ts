@@ -8,6 +8,7 @@ import {
   verifyPassword,
 } from "@/lib/auth";
 import { handle, json, rateLimit, readJson } from "@/lib/api-helpers";
+import { readStoredPreferences } from "@/lib/brief";
 
 export async function POST(req: Request, { params }: { params: Promise<{ action: string }> }) {
   return handle(async () => {
@@ -99,7 +100,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ action:
     const { action } = await params;
     if (action === "me") {
       const user = await getAuthUser();
-      return json({ user });
+      if (!user) return json({ user: null, preferences: null });
+      const row = await db.user.findUnique({ where: { id: user.id }, select: { preferences: true } });
+      return json({ user, preferences: readStoredPreferences(row?.preferences) });
     }
     throw new HttpError(404, "Unknown auth action");
   });

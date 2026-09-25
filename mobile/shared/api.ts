@@ -19,6 +19,7 @@ import type {
   TripSummary,
 } from "./types";
 import { addDays, dayKey, daysBetween, learnServerOffset } from "./trip";
+import type { TravellerPreferences, TripBrief } from "./brief";
 
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000";
 
@@ -136,6 +137,12 @@ export async function fetchMe() {
   return res.user;
 }
 
+/** What this traveller told us last time, to prefill a new trip's interview. */
+export async function fetchPreferences() {
+  const res = await api.get<{ preferences: TravellerPreferences | null }>("/api/auth/me");
+  return res.preferences ?? null;
+}
+
 // ------------------------------------------------------------ trip endpoints
 
 export function fetchTrips() {
@@ -157,6 +164,11 @@ export async function fetchTripBundle(tripId: string) {
 
 export function createTrip(payload: CreateTripPayload) {
   return api.post<{ trip: { id: string } }>("/api/trips", payload);
+}
+
+/** Replace the trip's brief. The server also updates pace, interests and head count from it. */
+export function saveTripBrief(tripId: string, brief: TripBrief) {
+  return api.patch<{ trip: { id: string } }>(`/api/trips/${tripId}`, { brief });
 }
 
 export function deleteTrip(tripId: string) {

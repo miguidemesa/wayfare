@@ -23,6 +23,7 @@ test("notifications - computes flight, reservation, and weather alerts", () => {
       interests: "[]",
       travelersCount: 2,
       notes: null,
+      brief: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     },
