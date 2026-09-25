@@ -184,6 +184,7 @@ model ItineraryItem {
   cost          Float?
   currency      String?
   notes         String?
+  reason        String? // why the planner picked it ("You're into history · 6 min walk from Shinjuku")
   confirmed     Boolean  @default(true)
   transportMode String? // mode of travel TO THE NEXT item
   transportMin  Int?

@@ -45,6 +45,8 @@ export type ItineraryItem = {
   cost: number | null;
   currency: string | null;
   notes: string | null;
+  /** Why the planner picked it; null for stops the traveller added. */
+  reason?: string | null;
   confirmed: boolean;
   transportMode: string | null;
   transportMin: number | null;

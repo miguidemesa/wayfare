@@ -156,6 +156,48 @@ export function Choices<K extends string>({
   );
 }
 
+/** Chips where any number can be on (interests, diets). Selected = ink-filled. */
+export function Toggles<K extends string>({
+  options,
+  values,
+  onChange,
+}: {
+  options: readonly { key: K; label: string }[];
+  values: readonly K[];
+  onChange: (values: K[]) => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+      {options.map((o) => {
+        const on = values.includes(o.key);
+        return (
+          <Pressable
+            key={o.key}
+            onPress={() => onChange(on ? values.filter((v) => v !== o.key) : [...values, o.key])}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: on }}
+            hitSlop={{ top: 4, bottom: 4 }}
+            style={({ pressed }) => ({
+              paddingHorizontal: 12,
+              height: 36,
+              justifyContent: "center",
+              borderRadius: radii.sm,
+              borderWidth: 1,
+              borderColor: on ? colors.ink : colors.edge,
+              backgroundColor: on ? colors.ink : pressed ? colors.sunk : colors.raised,
+            })}
+          >
+            <T v="meta" style={{ color: on ? colors.onInk : colors.ink2 }}>
+              {o.label}
+            </T>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 /** Typographic empty state — a headline, one sentence, one way forward. */
 export function Empty({
   title,

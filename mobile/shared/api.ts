@@ -271,7 +271,7 @@ export function generateItineraryPlan(
   plan?: unknown[],
   pace?: "relaxed" | "balanced" | "packed"
 ) {
-  return request<{ plan?: unknown[]; appliedDays?: number; totalTravelMin?: number; estCost?: number }>(
+  return request<{ plan?: unknown[]; appliedDays?: number; totalTravelMin?: number; estCost?: number; unplacedMustDos?: string[] }>(
     `/api/trips/${tripId}/generate`,
     { method: "POST", json: { apply, plan, pace }, timeoutMs: 45000 }
   );
@@ -398,6 +398,8 @@ export function addHotel(
     name: string;
     destinationName?: string;
     address?: string;
+    lat?: number;
+    lng?: number;
     checkIn: string;
     checkOut: string;
     confirmationNumber?: string;
@@ -523,6 +525,23 @@ export function askConcierge(tripId: string, message: string, conversationId: st
     json: { message, conversationId },
     timeoutMs: 60000,
   });
+}
+
+// ------------------------------------------------- planning interview
+
+export type StayArea = { name: string; lat: number; lng: number; note: string };
+
+/** Where people usually stay in a city the guide covers (empty elsewhere, for now). */
+export function fetchStayAreas(city: string) {
+  return api.get<{ areas: StayArea[] }>(`/api/places/areas?city=${encodeURIComponent(city)}`).then((r) => r.areas);
+}
+
+export type GuidePlace = { poiId: string; name: string; city: string; neighborhood: string; category: string; rating: number };
+
+/** Search the place guide before a trip exists. `covered` = which of the cities it knows. */
+export function searchGuide(cities: string[], q: string) {
+  const params = new URLSearchParams({ cities: cities.join(","), q });
+  return api.get<{ places: GuidePlace[]; covered: string[] }>(`/api/places?${params.toString()}`);
 }
 
 // ------------------------------------------------------------ geocoding

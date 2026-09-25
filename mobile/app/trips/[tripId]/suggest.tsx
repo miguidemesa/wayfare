@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, ScrollView, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { ApiError, generateItineraryPlan } from "@/shared/api";
@@ -27,6 +27,7 @@ type DraftItem = {
   currency: string;
   transportMode: string | null;
   transportMin: number | null;
+  reason?: string;
 };
 type DraftDay = { date: string; city: string; title: string; items: DraftItem[]; estTravelMin: number };
 
@@ -45,15 +46,18 @@ export default function Suggest() {
 function SuggestFlow() {
   const { colors } = useTheme();
   const toast = useToast();
-  const { date } = useLocalSearchParams<{ date?: string }>();
+  // auto=1: arriving from the planning interview, so draft straight away.
+  const { date, auto } = useLocalSearchParams<{ date?: string; auto?: string }>();
   const { tripId, bundle, reload, setDayIndex } = useLoadedTrip();
   const { trip, destinations, days } = bundle;
 
   const [pace, setPace] = useState<Pace>(((trip.pace as Pace) || "balanced") as Pace);
   const [draft, setDraft] = useState<DraftDay[] | null>(null);
-  const [totals, setTotals] = useState<{ travel: number; cost: number }>({ travel: 0, cost: 0 });
+  // Costs stay in each place's own currency (yen and euros don't add up).
+  const [totals, setTotals] = useState<{ travel: number; cost: [string, number][] }>({ travel: 0, cost: [] });
   const [phase, setPhase] = useState<"setup" | "drafting" | "preview" | "applying">("setup");
   const [error, setError] = useState<string | null>(null);
+  const [unplaced, setUnplaced] = useState<string[]>([]);
 
   const interests = useMemo<string[]>(() => {
     try {
@@ -83,8 +87,11 @@ function SuggestFlow() {
       if (date) plan = plan.filter((d) => dayKey(d.date) === date);
       setDraft(plan);
       const travel = plan.reduce((s, d) => s + (d.estTravelMin || 0), 0);
-      const cost = plan.reduce((s, d) => s + d.items.reduce((c, i) => c + (i.cost || 0), 0), 0);
+      const byCurrency = new Map<string, number>();
+      for (const d of plan) for (const i of d.items) if (i.cost) byCurrency.set(i.currency || trip.homeCurrency, (byCurrency.get(i.currency || trip.homeCurrency) ?? 0) + i.cost);
+      const cost = [...byCurrency.entries()];
       setTotals({ travel, cost });
+      setUnplaced(res.unplacedMustDos ?? []);
       setPhase("preview");
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Couldn't draft a plan right now.");
@@ -107,6 +114,16 @@ function SuggestFlow() {
     }
   }
 
+  const started = useRef(false);
+  useEffect(() => {
+    if (auto === "1" && !started.current) {
+      started.current = true;
+      void run();
+    }
+    // run() reads current state; this only fires once, on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto]);
+
   const title = single ? `Plan Day ${singleIdx + 1}` : "Draft a plan";
 
   return (
@@ -125,7 +142,9 @@ function SuggestFlow() {
           <View style={{ paddingTop: space.xl, gap: space.sm }}>
             <T v="title" accessibilityRole="header">{single ? `A plan for ${fmtDay(single.date, { weekday: "long" })}` : `A plan for ${cities || "your trip"}`}</T>
             <T v="body" c="ink2">
-              Wayfare picks places from its guide, keeps each day to one part of town so you’re not crossing the city, and fits meals in at sensible times. You’ll see it before anything changes.
+              {bundle.brief
+                ? "Wayfare plans from what you told it: your must-dos first, each day starting near where you’re staying, at your pace, with meals at sensible times. You’ll see it before anything changes."
+                : "Wayfare picks places from its guide, keeps each day to one part of town so you’re not crossing the city, and fits meals in at sensible times. You’ll see it before anything changes."}
             </T>
           </View>
 
@@ -174,11 +193,16 @@ function SuggestFlow() {
             <T v="meta" c="ink2" num>
               {draftStops} stops
               {totals.travel ? ` · about ${fmtDuration(totals.travel)} getting around` : ""}
-              {totals.cost ? ` · ~${fmtMoney(Math.round(totals.cost), trip.homeCurrency)} in entry and meals` : ""}
+              {totals.cost.length ? ` · ~${totals.cost.map(([c, v]) => fmtMoney(Math.round(v), c)).join(" + ")} in entry and meals` : ""}
             </T>
             {existing > 0 ? (
               <T v="meta" c="caution">
                 These are added alongside the {existing} {existing === 1 ? "stop" : "stops"} already on {draft!.length === 1 ? "that day" : "these days"}.
+              </T>
+            ) : null}
+            {unplaced.length ? (
+              <T v="meta" c="ink2">
+                Not in this plan: {unplaced.join(", ")}. {unplaced.length === 1 ? "It isn’t" : "They aren’t"} in Wayfare’s guide yet, or didn’t fit. Add {unplaced.length === 1 ? "it" : "them"} to a day yourself.
               </T>
             ) : null}
           </View>
@@ -208,6 +232,11 @@ function SuggestFlow() {
                         <T v="small" c="ink3">
                           {[it.neighborhood, fmtDuration(it.durationMin)].filter(Boolean).join(" · ")}
                         </T>
+                        {it.reason ? (
+                          <T v="aside" c="ink2" style={{ marginTop: 2, fontSize: 14, lineHeight: 19 }}>
+                            {it.reason}
+                          </T>
+                        ) : null}
                       </View>
                     </View>
                     {it.transportMin && i < d.items.length - 1 ? (

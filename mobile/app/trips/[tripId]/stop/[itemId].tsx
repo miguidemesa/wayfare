@@ -126,6 +126,15 @@ function StopDetail() {
           </T>
         </Pressable>
 
+        {stop.reason ? (
+          <View style={{ marginTop: space.lg }}>
+            <SectionLabel>Why it’s here</SectionLabel>
+            <T v="aside" c="ink2">
+              {stop.reason}
+            </T>
+          </View>
+        ) : null}
+
         {stop.notes ? (
           <View style={{ marginTop: space.lg }}>
             <SectionLabel>Notes</SectionLabel>

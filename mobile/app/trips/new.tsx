@@ -1,312 +1,374 @@
-import { useEffect, useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { ApiError, createTrip, layOutDays, searchCities, type Place } from "@/shared/api";
-import { fmtDate, GUTTER, radii, space, useTheme } from "@/shared/theme";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { addHotel, ApiError, createTrip, fetchPreferences, layOutDays, saveTripBrief, type Place } from "@/shared/api";
+import { AVOIDS, briefFromPreferences, describeParty, DIETS, emptyBrief, INTERESTS, type TripBrief } from "@/shared/brief";
+import { fmtClock, fmtDay, fmtMoney, GUTTER, space, useTheme } from "@/shared/theme";
 import { SheetBar } from "@/components/ui/Bars";
 import { Button } from "@/components/ui/Button";
 import { Choices, Field, Rule } from "@/components/ui/Primitives";
-import { RangeCalendar } from "@/components/ui/RangeCalendar";
 import { T } from "@/components/ui/T";
+import {
+  ArrivalStep,
+  FoodStep,
+  GettingAroundStep,
+  InterestsStep,
+  MustDoStep,
+  PaceStep,
+  POPULAR,
+  StayStep,
+  WhenStep,
+  WhereStep,
+  WhoStep,
+} from "@/components/interview/steps";
 
 export { ErrorFallback as ErrorBoundary } from "@/components/ErrorFallback";
 
+// The questions preferences answer; the rest are about this trip.
+const PREFILLED_STEPS = new Set(["who", "interests", "pace", "food", "around"]);
+
 const HOME_CURRENCIES = ["USD", "EUR", "GBP", "PHP", "JPY", "AUD", "CAD", "SGD", "KRW"].map((c) => ({ key: c, label: c }));
-const PACES = [
-  { key: "relaxed" as const, label: "Relaxed" },
-  { key: "balanced" as const, label: "Balanced" },
-  { key: "packed" as const, label: "Packed" },
-];
-// Quick picks from the previous version; the emoji and theme feed the web
-// app's trip covers.
-const POPULAR: (Place & { emoji: string; theme: string })[] = [
-  { name: "Tokyo", country: "Japan", admin: null, lat: 35.6762, lng: 139.6503, emoji: "⛩️", theme: "japan" },
-  { name: "Kyoto", country: "Japan", admin: null, lat: 35.0116, lng: 135.7681, emoji: "🌸", theme: "japan" },
-  { name: "Paris", country: "France", admin: null, lat: 48.8566, lng: 2.3522, emoji: "🥐", theme: "france" },
-  { name: "Rome", country: "Italy", admin: null, lat: 41.9028, lng: 12.4964, emoji: "🍝", theme: "italy" },
-  { name: "Manila", country: "Philippines", admin: null, lat: 14.5995, lng: 120.9842, emoji: "🏝️", theme: "philippines" },
-  { name: "Seoul", country: "South Korea", admin: null, lat: 37.5665, lng: 126.978, emoji: "🌆", theme: "korea" },
-];
 
-const INTERESTS = ["Food & Dining", "Historic Sites", "Cafes & Coffee", "Art & Museums", "Nature & Parks", "Shopping", "Nightlife", "Photography", "Hidden Gems"];
+type Draft = {
+  places: Place[];
+  start: string | null;
+  end: string | null;
+  title: string;
+  budget: string;
+  home: string;
+};
 
+type Step = {
+  key: string;
+  /** The question, in Wayfare's voice. */
+  ask: string;
+  why?: string;
+  /** Can't continue until this holds. Steps without it can be skipped. */
+  ready?: boolean;
+  /** Whether the traveller has answered, so Next reads "Next" rather than "Skip". */
+  answered: boolean;
+  body: ReactNode;
+};
+
+// The planning interview: one question per screen, anything but where and
+// when can be skipped, and every answer lands in the trip brief the planner
+// and the concierge work from. Ends by creating the trip and going straight
+// into a drafted plan to preview.
 export default function NewTrip() {
   const { colors } = useTheme();
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Place[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const [places, setPlaces] = useState<Place[]>([]);
-  const [start, setStart] = useState<string | null>(null);
-  const [end, setEnd] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
-  const [budget, setBudget] = useState("");
-  const [home, setHome] = useState("USD");
-  const [pace, setPace] = useState<"relaxed" | "balanced" | "packed">("balanced");
-  const [interests, setInterests] = useState<string[]>(["Food & Dining", "Historic Sites"]);
-  const [travelers, setTravelers] = useState(1);
+  const insets = useSafeAreaInsets();
+  const scroller = useRef<ScrollView>(null);
+  const [draft, setDraft] = useState<Draft>({ places: [], start: null, end: null, title: "", budget: "", home: "USD" });
+  const [brief, setBriefState] = useState<TripBrief>(emptyBrief);
+  const [prefilled, setPrefilled] = useState(false);
+  const [index, setIndex] = useState(0);
   const [status, setStatus] = useState<"idle" | "creating" | "laying">("idle");
   const [error, setError] = useState<string | null>(null);
 
+  const setBrief = useCallback((fn: (b: TripBrief) => TripBrief) => setBriefState(fn), []);
+  const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
+  const cities = useMemo(() => draft.places.map((p) => p.name), [draft.places]);
+
+  // Start from what this traveller told us last time.
   useEffect(() => {
-    const q = query.trim();
-    if (q.length < 2) {
-      setResults([]);
-      return;
-    }
     let live = true;
-    const t = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const r = await searchCities(q);
-        if (live) {
-          setResults(r);
-          setSearchError(null);
+    fetchPreferences()
+      .then((prefs) => {
+        if (live && prefs) {
+          setBriefState(briefFromPreferences(prefs));
+          setPrefilled(true);
         }
-      } catch (e) {
-        if (live) setSearchError(e instanceof ApiError ? e.message : "City search isn't available.");
-      } finally {
-        if (live) setSearching(false);
-      }
-    }, 300);
+      })
+      .catch(() => {});
     return () => {
       live = false;
-      clearTimeout(t);
     };
-  }, [query]);
+  }, []);
 
-  function addPlace(p: Place) {
-    setPlaces((ps) => (ps.some((x) => x.name === p.name && x.country === p.country) ? ps : [...ps, p].slice(0, 4)));
-    setQuery("");
-    setResults([]);
+  const suggestedTitle = draft.places.length
+    ? `${cities.join(" & ")}${draft.start ? ` in ${new Date(draft.start + "T12:00:00").toLocaleDateString("en-US", { month: "long" })}` : ""}`
+    : "";
+  const stays = brief.stays.filter((s) => cities.includes(s.city));
+  const stayAnswered = stays.some((s) => s.booked || s.area || s.hotelName);
+
+  const steps: Step[] = [
+    {
+      key: "where",
+      ask: "Where are you going?",
+      why: "Up to four cities, in the order you'll visit.",
+      ready: draft.places.length > 0,
+      answered: draft.places.length > 0,
+      body: <WhereStep places={draft.places} onChange={(places) => set({ places })} />,
+    },
+    {
+      key: "when",
+      ask: "When?",
+      ready: !!(draft.start && draft.end),
+      answered: !!(draft.start && draft.end),
+      body: <WhenStep start={draft.start} end={draft.end} onChange={(start, end) => set({ start, end })} />,
+    },
+    {
+      key: "stay",
+      ask: cities.length === 1 ? `Where are you staying in ${cities[0]}?` : "Where are you staying?",
+      why: "Each day starts and ends near your hotel, so this matters most.",
+      answered: stayAnswered,
+      body: <StayStep cities={cities} stays={stays} setBrief={setBrief} />,
+    },
+    {
+      key: "who",
+      ask: "Who's coming?",
+      answered: brief.party.adults !== 1 || brief.party.childrenAges.length > 0 || brief.party.seniors > 0,
+      body: <WhoStep party={brief.party} setBrief={setBrief} />,
+    },
+    {
+      key: "interests",
+      ask: "What are you into?",
+      why: "Pick as many as you like. Wayfare favours places that match.",
+      answered: brief.interests.length > 0,
+      body: <InterestsStep interests={brief.interests} setBrief={setBrief} />,
+    },
+    {
+      key: "must",
+      ask: "Anything you can't miss?",
+      why: "Wayfare builds the days around these first.",
+      answered: brief.mustDos.length > 0,
+      body: <MustDoStep cities={cities} mustDos={brief.mustDos} setBrief={setBrief} />,
+    },
+    {
+      key: "pace",
+      ask: "How do you like your days?",
+      answered: true,
+      body: <PaceStep pace={brief.pace} rhythm={brief.rhythm} setBrief={setBrief} />,
+    },
+    {
+      key: "food",
+      ask: "And food?",
+      answered: brief.food.diet.length > 0 || brief.food.priceLevel != null || brief.food.mustTry.length > 0,
+      body: <FoodStep food={brief.food} setBrief={setBrief} />,
+    },
+    {
+      key: "around",
+      ask: "Getting around",
+      answered: brief.mobility.maxWalkMin != null || brief.avoid.length > 0,
+      body: <GettingAroundStep mobility={brief.mobility} avoid={brief.avoid} setBrief={setBrief} />,
+    },
+    {
+      key: "arrive",
+      ask: "When do you arrive and leave?",
+      why: "Roughly is fine.",
+      answered: brief.arrival?.time != null || brief.departure?.time != null,
+      body:
+        draft.start && draft.end ? (
+          <ArrivalStep start={draft.start} end={draft.end} arrival={brief.arrival} departure={brief.departure} setBrief={setBrief} />
+        ) : null,
+    },
+    {
+      key: "budget",
+      ask: "Is there a budget?",
+      why: "Everything you spend is totalled in your home currency.",
+      answered: !!draft.budget.trim(),
+      body: (
+        <View style={{ gap: space.md }}>
+          <Field label="Budget for the trip" value={draft.budget} onChangeText={(budget) => set({ budget })} placeholder="Optional" keyboardType="decimal-pad" numeric />
+          <T v="label" c="ink3">
+            Home currency
+          </T>
+          <Choices options={HOME_CURRENCIES} value={draft.home} onChange={(home) => set({ home })} />
+        </View>
+      ),
+    },
+    {
+      key: "review",
+      ask: "Here's your trip",
+      why: "Next, Wayfare drafts your days from this. You'll see the plan before any of it is added.",
+      answered: true,
+      body: <Review draft={draft} brief={{ ...brief, stays }} suggestedTitle={suggestedTitle} onTitle={(title) => set({ title })} onEdit={(key) => goTo(key)} />,
+    },
+  ];
+
+  const step = steps[index];
+  const last = index === steps.length - 1;
+
+  function goTo(key: string) {
+    const i = steps.findIndex((s) => s.key === key);
+    if (i >= 0) move(i);
   }
 
-  const suggestedTitle = places.length
-    ? `${places.map((p) => p.name).join(" & ")}${start ? ` in ${new Date(start + "T00:00:00").toLocaleDateString("en-US", { month: "long" })}` : ""}`
-    : "";
+  function move(i: number) {
+    setIndex(i);
+    setError(null);
+    scroller.current?.scrollTo({ y: 0, animated: false });
+  }
 
   async function create() {
-    if (!places.length) return setError("Choose where you're going.");
-    if (!start || !end) return setError("Pick the first and last day of the trip.");
-    const budgetNum = budget.trim() ? Number(budget.replace(/,/g, "")) : 0;
-    if (!Number.isFinite(budgetNum) || budgetNum < 0) return setError("Budget should be a number, or leave it empty.");
+    const { places, start, end } = draft;
+    if (!places.length || !start || !end) return;
+    const budgetNum = draft.budget.trim() ? Number(draft.budget.replace(/,/g, "")) : 0;
+    if (!Number.isFinite(budgetNum) || budgetNum < 0) {
+      setError("The budget should be a number, or leave it empty.");
+      goTo("budget");
+      return;
+    }
     setError(null);
     setStatus("creating");
+    const finalBrief: TripBrief = { ...brief, stays };
     try {
       const res = await createTrip({
-        title: title.trim() || suggestedTitle,
+        title: draft.title.trim() || suggestedTitle,
         destinations: places.map((p) => ({ name: p.name, country: p.country, lat: p.lat, lng: p.lng })),
         startDate: start,
         endDate: end,
         budgetAmount: budgetNum,
-        homeCurrency: home,
-        pace,
-        interests,
-        travelersCount: travelers,
+        homeCurrency: draft.home,
+        brief: finalBrief,
         ...coverFor(places[0]),
       });
-      // Lay out a day for every date so the plan is ready to fill.
+      const tripId = res.trip.id;
       setStatus("laying");
-      try {
-        await layOutDays(res.trip.id, start, end, [], places.map((p) => p.name));
-      } catch {
-        // The Plan tab offers to finish this if it didn't complete.
+      // A single-city stay that's booked becomes a real booking, dated for
+      // the whole trip, so it shows up in Bookings and on the map.
+      const booked = stays.length === 1 && places.length === 1 ? stays.find((s) => s.booked && s.hotelName) : undefined;
+      if (booked) {
+        try {
+          const { hotel } = await addHotel(tripId, {
+            name: booked.hotelName!,
+            destinationName: booked.city,
+            checkIn: start,
+            checkOut: end,
+            ...(booked.lat != null && booked.lng != null ? { lat: booked.lat, lng: booked.lng } : {}),
+          });
+          await saveTripBrief(tripId, { ...finalBrief, stays: finalBrief.stays.map((s) => (s === booked ? { ...s, hotelId: hotel.id } : s)) });
+        } catch {
+          // The brief still has the hotel; it can be added in Bookings.
+        }
       }
-      router.replace(`/trips/${res.trip.id}`);
+      try {
+        await layOutDays(tripId, start, end, [], cities);
+      } catch {
+        // The Plan tab offers to finish setting up days.
+      }
+      // Straight into a drafted plan, with the trip's tabs underneath.
+      router.replace({ pathname: "/trips/[tripId]/suggest", params: { tripId, auto: "1" } });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Couldn't create the trip. Try again.");
       setStatus("idle");
     }
   }
 
-  const nights = start && end ? Math.round((new Date(end + "T00:00:00").getTime() - new Date(start + "T00:00:00").getTime()) / 86400000) : null;
+  // Required questions never offer to skip; the button waits, disabled, as "Next".
+  const nextLabel = last ? (status === "laying" ? "Setting up your days…" : "Create trip and draft my days") : step.answered || step.ready !== undefined ? "Next" : "Skip";
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.paper }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <SheetBar title="New trip" />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: GUTTER, paddingBottom: space.xxxl }} keyboardShouldPersistTaps="handled">
-        <T v="title" style={{ marginTop: space.xl }} accessibilityRole="header">
-          Where are you going?
+      <View style={{ height: 3, backgroundColor: colors.rule }} accessibilityRole="progressbar" accessibilityValue={{ min: 1, max: steps.length, now: index + 1, text: `Question ${index + 1} of ${steps.length}` }}>
+        <View style={{ height: 3, width: `${((index + 1) / steps.length) * 100}%`, backgroundColor: colors.accent }} />
+      </View>
+      <ScrollView ref={scroller} contentContainerStyle={{ paddingHorizontal: GUTTER, paddingTop: space.xl, paddingBottom: space.xxxl }} keyboardShouldPersistTaps="handled">
+        <T v="label" c="ink3" num>
+          {index + 1} of {steps.length}
+          {prefilled && PREFILLED_STEPS.has(step.key) ? " · Filled in from your last trip" : ""}
         </T>
-
-        {places.length ? (
-          <View style={{ marginTop: space.lg }}>
-            {places.map((p, i) => (
-              <View key={`${p.name}-${i}`} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.rule }}>
-                <View style={{ flex: 1 }}>
-                  <T v="entry">{p.name}</T>
-                  <T v="small" c="ink3">
-                    {[p.admin, p.country].filter(Boolean).join(", ")}
-                  </T>
-                </View>
-                <Pressable onPress={() => setPlaces((ps) => ps.filter((_, j) => j !== i))} accessibilityRole="button" accessibilityLabel={`Remove ${p.name}`} hitSlop={10}>
-                  <Ionicons name="close" size={20} color={colors.ink3} />
-                </Pressable>
-              </View>
-            ))}
-          </View>
+        <T v="title" accessibilityRole="header" style={{ marginTop: 6 }}>
+          {step.ask}
+        </T>
+        {step.why ? (
+          <T v="body" c="ink2" style={{ marginTop: 6 }}>
+            {step.why}
+          </T>
         ) : null}
-
-        <View style={{ marginTop: space.lg }}>
-          <Field
-            value={query}
-            onChangeText={setQuery}
-            placeholder={places.length ? "Add another city" : "Search for a city"}
-            autoFocus
-            autoCorrect={false}
-            returnKeyType="search"
-            accessibilityLabel="Search for a city"
-          />
-          {searching ? <ActivityIndicator size="small" color={colors.ink3} style={{ position: "absolute", right: 14, top: 14 }} /> : null}
-          {searchError ? (
-            <T v="small" c="danger" style={{ marginTop: 6 }}>
-              {searchError}
-            </T>
-          ) : null}
-          {!places.length && !query.trim() ? (
-            <View style={{ marginTop: space.md, gap: 8 }}>
-              <T v="label" c="ink3">
-                Popular
-              </T>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                {POPULAR.map((p) => (
-                  <Pressable
-                    key={p.name}
-                    onPress={() => addPlace(p)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${p.name}, ${p.country}`}
-                    style={({ pressed }) => ({ paddingHorizontal: 12, height: 36, justifyContent: "center", borderRadius: radii.sm, borderWidth: 1, borderColor: colors.rule, backgroundColor: pressed ? colors.sunk : colors.raised })}
-                  >
-                    <T v="meta" c="ink2">
-                      {p.name}
-                    </T>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-          ) : null}
-          {results.length ? (
-            <View style={{ marginTop: 6, borderWidth: 1, borderColor: colors.rule, borderRadius: radii.md, backgroundColor: colors.raised }}>
-              {results.map((r, i) => (
-                <Pressable
-                  key={`${r.name}-${r.lat}`}
-                  onPress={() => addPlace(r)}
-                  accessibilityRole="button"
-                  style={({ pressed }) => ({ paddingHorizontal: 14, paddingVertical: 11, borderTopWidth: i ? 1 : 0, borderTopColor: colors.rule, backgroundColor: pressed ? colors.sunk : "transparent" })}
-                >
-                  <T v="bodyStrong">{r.name}</T>
-                  <T v="small" c="ink3">
-                    {[r.admin, r.country].filter(Boolean).join(", ")}
-                  </T>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
-        </View>
-
-        <T v="title" style={{ marginTop: space.xxl }} accessibilityRole="header">
-          When?
-        </T>
-        <T v="meta" c={start && end ? "ink" : "ink3"} num style={{ marginTop: 4, marginBottom: space.md }}>
-          {start && end
-            ? `${fmtDate(start + "T00:00:00", { weekday: "short", month: "short", day: "numeric" })} – ${fmtDate(end + "T00:00:00", { weekday: "short", month: "short", day: "numeric" })} · ${nights! + 1} days`
-            : start
-              ? "Now tap the last day"
-              : "Tap the first day, then the last"}
-        </T>
-        <RangeCalendar
-          start={start}
-          end={end}
-          onChange={(s, e) => {
-            setStart(s);
-            setEnd(e);
-          }}
-        />
-
-        <Rule style={{ marginTop: space.xl }} />
-
-        <View style={{ gap: space.xl, marginTop: space.xl }}>
-          <Field label="Name" value={title} onChangeText={setTitle} placeholder={suggestedTitle || "Name the trip"} />
-
-          <View style={{ gap: 8 }}>
-            <Field label="Budget" value={budget} onChangeText={setBudget} placeholder="Optional" keyboardType="decimal-pad" numeric />
-            <Choices options={HOME_CURRENCIES} value={home} onChange={setHome} />
-            <T v="small" c="ink3">
-              Your home currency. Everything you spend is totalled in it.
-            </T>
-          </View>
-
-          <View style={{ gap: 8 }}>
-            <T v="label" c="ink3">
-              Pace
-            </T>
-            <Choices options={PACES} value={pace} onChange={setPace} />
-          </View>
-
-          <View style={{ gap: 8 }}>
-            <T v="label" c="ink3">
-              Interested in
-            </T>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-              {INTERESTS.map((i) => {
-                const on = interests.includes(i);
-                return (
-                  <Pressable
-                    key={i}
-                    onPress={() => setInterests((xs) => (on ? xs.filter((x) => x !== i) : [...xs, i]))}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: on }}
-                    style={{ paddingHorizontal: 12, height: 36, justifyContent: "center", borderRadius: radii.sm, borderWidth: 1, borderColor: on ? colors.ink : colors.rule, backgroundColor: on ? colors.ink : colors.raised }}
-                  >
-                    <T v="meta" style={{ color: on ? colors.onInk : colors.ink2 }}>
-                      {i}
-                    </T>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <View>
-              <T v="label" c="ink3">
-                Travellers
-              </T>
-              <T v="heading" num style={{ marginTop: 2 }}>
-                {travelers}
-              </T>
-            </View>
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              <Stepper icon="remove" label="Fewer travellers" disabled={travelers <= 1} onPress={() => setTravelers((n) => Math.max(1, n - 1))} />
-              <Stepper icon="add" label="More travellers" disabled={travelers >= 20} onPress={() => setTravelers((n) => Math.min(20, n + 1))} />
-            </View>
-          </View>
-
-          {error ? (
-            <T v="meta" c="danger" accessibilityLiveRegion="polite">
-              {error}
-            </T>
-          ) : null}
-          <Button size="lg" label={status === "laying" ? "Laying out your days…" : "Create trip"} loading={status === "creating"} disabled={status !== "idle"} onPress={create} />
-        </View>
+        <View style={{ marginTop: space.xl }}>{step.body}</View>
+        {error ? (
+          <T v="meta" c="danger" style={{ marginTop: space.lg }} accessibilityLiveRegion="polite">
+            {error}
+          </T>
+        ) : null}
       </ScrollView>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: space.md,
+          paddingHorizontal: GUTTER,
+          paddingTop: space.md,
+          paddingBottom: Math.max(insets.bottom, space.md),
+          borderTopWidth: 1,
+          borderTopColor: colors.rule,
+          backgroundColor: colors.paper,
+        }}
+      >
+        {index > 0 ? <Button variant="quiet" label="Back" onPress={() => move(index - 1)} disabled={status !== "idle"} /> : null}
+        <View style={{ flex: 1 }} />
+        <Button
+          variant={last ? "accent" : step.answered ? "primary" : "secondary"}
+          label={nextLabel}
+          loading={status === "creating"}
+          busy={status === "laying"}
+          disabled={step.ready === false}
+          onPress={last ? create : () => move(index + 1)}
+        />
+      </View>
     </KeyboardAvoidingView>
   );
 }
 
-function Stepper({ icon, label, disabled, onPress }: { icon: "add" | "remove"; label: string; disabled: boolean; onPress: () => void }) {
-  const { colors } = useTheme();
+/** Everything the traveller said, each line one tap from changing it. */
+function Review({ draft, brief, suggestedTitle, onTitle, onEdit }: { draft: Draft; brief: TripBrief; suggestedTitle: string; onTitle: (t: string) => void; onEdit: (key: string) => void }) {
+  const label = <K extends string>(list: readonly { key: K; label: string }[], keys: readonly K[]) => keys.map((k) => list.find((x) => x.key === k)?.label ?? k).join(", ");
+  const moment = (m: TripBrief["arrival"]) => (m?.time != null ? `${fmtClock(m.time)}${m.where ? ` at ${m.where}` : ""}` : null);
+  const stayLine = brief.stays
+    .map((s) => [brief.stays.length > 1 ? `${s.city}:` : null, s.hotelName, s.area ? (s.hotelName ? `(${s.area})` : `around ${s.area}`) : null].filter(Boolean).join(" "))
+    .filter((l) => l.trim() && !l.endsWith(":"))
+    .join(" · ");
+
+  const rows: [string, string, string | null][] = [
+    ["where", "Where", draft.places.map((p) => p.name).join(" → ")],
+    ["when", "When", draft.start && draft.end ? `${fmtDay(draft.start, { month: "short", day: "numeric" })} – ${fmtDay(draft.end, { month: "short", day: "numeric", year: "numeric" })}` : null],
+    ["stay", "Staying", stayLine || null],
+    ["who", "Who", describeParty(brief.party)],
+    ["interests", "Into", brief.interests.length ? label(INTERESTS, brief.interests) : null],
+    ["must", "Must-dos", brief.mustDos.map((m) => m.name).join(", ") || null],
+    ["pace", "Pace", `${brief.pace[0].toUpperCase()}${brief.pace.slice(1)}, ${fmtClock(brief.rhythm.dayStart)}–${fmtClock(brief.rhythm.dayEnd)}`],
+    [
+      "food",
+      "Food",
+      [brief.food.diet.length ? label(DIETS, brief.food.diet) : null, brief.food.priceLevel ? ["Cheap eats", "Mid-range", "Nice", "Splurge"][brief.food.priceLevel - 1] : null, brief.food.mustTry.length ? `try ${brief.food.mustTry.join(", ")}` : null]
+        .filter(Boolean)
+        .join(" · ") || null,
+    ],
+    ["around", "Getting around", [brief.mobility.maxWalkMin ? `walks up to ${brief.mobility.maxWalkMin} min` : null, brief.avoid.length ? `avoid ${label(AVOIDS, brief.avoid).toLowerCase()}` : null].filter(Boolean).join(" · ") || null],
+    ["arrive", "Arrive / leave", [moment(brief.arrival) && `arrive ${moment(brief.arrival)}`, moment(brief.departure) && `leave ${moment(brief.departure)}`].filter(Boolean).join(" · ") || null],
+    ["budget", "Budget", draft.budget.trim() && Number(draft.budget.replace(/,/g, "")) > 0 ? fmtMoney(Number(draft.budget.replace(/,/g, "")), draft.home) : null],
+  ];
+
   return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={({ pressed }) => ({ width: 44, height: 44, borderRadius: radii.md, borderWidth: 1, borderColor: colors.rule, alignItems: "center", justifyContent: "center", backgroundColor: pressed ? colors.sunk : colors.raised, opacity: disabled ? 0.35 : 1 })}
-    >
-      <Ionicons name={icon} size={20} color={colors.ink} />
-    </Pressable>
+    <View>
+      <Field label="Name the trip" value={draft.title} onChangeText={onTitle} placeholder={suggestedTitle || "Name the trip"} />
+      <View style={{ marginTop: space.xl }}>
+        <Rule />
+        {rows.map(([key, name, value]) => (
+          <Pressable
+            key={key}
+            onPress={() => onEdit(key)}
+            accessibilityRole="button"
+            accessibilityLabel={`${name}: ${value ?? "not set"}. Change`}
+            style={({ pressed }) => ({ flexDirection: "row", alignItems: "flex-start", gap: 12, paddingVertical: 12, opacity: pressed ? 0.6 : 1 })}
+          >
+            <T v="meta" c="ink3" style={{ width: 104 }}>
+              {name}
+            </T>
+            <T v="meta" c={value ? "ink" : "ink3"} style={{ flex: 1 }}>
+              {value ?? "Not set"}
+            </T>
+            <T v="meta" c="accent">
+              Change
+            </T>
+          </Pressable>
+        ))}
+        <Rule />
+      </View>
+    </View>
   );
 }
 

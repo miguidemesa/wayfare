@@ -2,8 +2,8 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { requireTrip } from "@/lib/trip-access";
 import { handle, json, readJson } from "@/lib/api-helpers";
-import { generateItinerary, type PlannedDay } from "@/lib/planner";
-import { normalizeInterests } from "@/lib/brief";
+import { generateItinerary, localDateKey, type PlannedDay } from "@/lib/planner";
+import { normalizeInterests, readStoredBrief } from "@/lib/brief";
 
 /**
  * AI itinerary generation.
@@ -72,6 +72,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ tripId:
                 cost: it.cost ?? null,
                 currency: it.currency ?? null,
                 notes: it.notes ?? null,
+                reason: it.reason ? String(it.reason).slice(0, 300) : null,
                 confirmed: false,
                 transportMode: it.transportMode,
                 transportMin: it.transportMin,
@@ -97,15 +98,38 @@ export async function POST(req: Request, { params }: { params: Promise<{ tripId:
     const cities = destinations.map((d) => d.name).filter(Boolean);
     if (!cities.length) return json({ error: "Add at least one destination first" }, 400);
 
+    // Everything the planner plans around: the brief, where they're sleeping,
+    // the forecast, and anything already booked.
+    const brief = readStoredBrief(trip.brief);
+    const [hotels, weather, reservations] = await Promise.all([
+      db.hotel.findMany({ where: { tripId, lat: { not: null }, lng: { not: null } } }),
+      db.weatherSnapshot.findMany({ where: { tripId } }),
+      db.reservation.findMany({ where: { tripId } }),
+    ]);
+    const rain: Record<string, number> = {};
+    for (const w of weather) rain[`${w.city}|${localDateKey(w.date)}`] = w.rainProb;
+
     const plan = generateItinerary({
       cities,
       dates,
-      interests: normalizeInterests(JSON.parse(trip.interests || "[]")),
-      pace: body.pace ?? (trip.pace as "relaxed" | "balanced" | "packed") ?? "balanced",
+      interests: brief ? brief.interests : normalizeInterests(JSON.parse(trip.interests || "[]")),
+      pace: body.pace ?? brief?.pace ?? (trip.pace as "relaxed" | "balanced" | "packed") ?? "balanced",
       currency: trip.homeCurrency,
       startLate: true,
       endEarly: true,
+      brief,
+      hotels: hotels.map((h) => ({ name: h.name, lat: h.lat!, lng: h.lng!, checkIn: h.checkIn, checkOut: h.checkOut })),
+      rain,
+      fixed: reservations.map((r) => {
+        const start = r.dateTime.getHours() * 60 + r.dateTime.getMinutes();
+        return { date: localDateKey(r.dateTime), start, end: start + 90 };
+      }),
     });
+
+    // Must-dos the plan couldn't place (not in the guide, or no room), so the
+    // app can say so rather than let them silently vanish.
+    const placed = new Set(plan.flatMap((d) => d.items.map((i) => i.poiId)));
+    const unplacedMustDos = (brief?.mustDos ?? []).filter((m) => !m.poiId || !placed.has(m.poiId)).map((m) => m.name);
 
     const totalTravelMin = plan.reduce((s, d) => s + d.estTravelMin, 0);
     const estCost = plan.reduce(
@@ -115,6 +139,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ tripId:
       0
     );
 
-    return json({ plan, totalTravelMin, estCost });
+    return json({ plan, totalTravelMin, estCost, unplacedMustDos });
   });
 }
