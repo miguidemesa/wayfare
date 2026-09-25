@@ -35,12 +35,13 @@ const EXAMPLES = ["Relax the schedule — we need rest", "Rainy afternoon altern
 export default function Ask() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { date } = useLocalSearchParams<{ date?: string }>();
+  // prompt: a suggested question (from an alert), put in the box unsent.
+  const { date, prompt } = useLocalSearchParams<{ date?: string; prompt?: string }>();
   const { tripId, bundle, reload } = useTrip();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(true);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(prompt ?? "");
   const [sending, setSending] = useState(false);
   const scroller = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);

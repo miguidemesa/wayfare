@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,6 +10,9 @@ import { openDirections } from "@/lib/directions";
 import type { ItineraryDay, ItineraryItem } from "@/shared/types";
 import { useLoadedTrip } from "@/lib/trip";
 import { DayStrip } from "@/components/trip/TripChrome";
+import { AlertCards } from "@/components/trip/AlertCards";
+import { tripAlerts } from "@/shared/alerts";
+import { dismissAlert, useDismissedAlerts, useNow } from "@/lib/alerts";
 import { Button } from "@/components/ui/Button";
 import { Empty, Rule } from "@/components/ui/Primitives";
 import { T } from "@/components/ui/T";
@@ -27,6 +30,9 @@ export default function PlanScreen() {
   const [draftOrder, setDraftOrder] = useState<ItineraryItem[] | null>(null);
   const [tidying, setTidying] = useState(false);
   const [layingOut, setLayingOut] = useState(false);
+  const clock = useNow();
+  const dismissed = useDismissedAlerts();
+  const alerts = useMemo(() => tripAlerts(bundle, clock), [bundle, clock]);
 
   const day: ItineraryDay | undefined = bundle.days[dayIndex];
 
@@ -75,7 +81,7 @@ export default function PlanScreen() {
   const phase = tripPhase(bundle.trip.startDate, bundle.trip.endDate);
   const packed = bundle.checklist.filter((c) => c.checked).length;
   const isToday = dayKey(day.date) === localKey(new Date());
-  const now = new Date();
+  const now = clock;
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const currency = bundle.trip.homeCurrency;
 
@@ -159,6 +165,12 @@ export default function PlanScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload()} tintColor={colors.ink3} />}
       >
         <Animated.View key={day.id} entering={FadeIn.duration(180).reduceMotion(ReduceMotion.System)}>
+          {/* What needs attention now, whichever day is open */}
+          {!reordering && alerts.some((a) => !dismissed.has(a.id)) ? (
+            <View style={{ paddingHorizontal: GUTTER, paddingTop: space.lg }}>
+              <AlertCards tripId={tripId} alerts={alerts} dismissed={dismissed} onDismiss={dismissAlert} setDayIndex={setDayIndex} />
+            </View>
+          ) : null}
           {/* The day's heading */}
           <View style={{ paddingHorizontal: GUTTER, paddingTop: space.xl, paddingBottom: space.lg }}>
             <T v="label" c={isToday ? "accent" : "ink3"}>

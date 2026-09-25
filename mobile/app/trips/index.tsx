@@ -11,6 +11,9 @@ import type { TripBundle, TripSummary } from "@/shared/types";
 import { useAuth } from "@/lib/auth";
 import { peekBundle } from "@/lib/trip";
 import { confirmDestructive } from "@/lib/confirm";
+import { dismissAlert, useDismissedAlerts, useNow } from "@/lib/alerts";
+import { tripAlerts } from "@/shared/alerts";
+import { AlertCards } from "@/components/trip/AlertCards";
 import { Button } from "@/components/ui/Button";
 import { Failure, Loading, Rule, SectionLabel } from "@/components/ui/Primitives";
 import { T } from "@/components/ui/T";
@@ -156,6 +159,9 @@ function pickFeatured(trips: TripSummary[]): TripSummary | null {
 
 function Featured({ summary, bundle }: { summary: TripSummary; bundle: TripBundle | null }) {
   const { colors } = useTheme();
+  const clock = useNow();
+  const dismissed = useDismissedAlerts();
+  const alerts = bundle ? tripAlerts(bundle, clock) : [];
   const phase = tripPhase(summary.startDate, summary.endDate);
   const place = summary.destinations.map((d) => d.name).join(" · ") || summary.subtitle || summary.title;
   const img = destinationPhoto(summary.destinations[0]?.name || summary.destinations[0]?.country || summary.title);
@@ -193,6 +199,12 @@ function Featured({ summary, bundle }: { summary: TripSummary; bundle: TripBundl
         />
         ) : null}
       </Pressable>
+
+      {alerts.length ? (
+        <View style={{ marginTop: space.lg }}>
+          <AlertCards tripId={summary.id} alerts={alerts} dismissed={dismissed} onDismiss={dismissAlert} max={1} />
+        </View>
+      ) : null}
 
       {phase === "during" ? (
         <View style={{ marginTop: space.lg }}>

@@ -134,6 +134,8 @@ export type Reservation = {
   confirmationNumber: string | null;
   locationName: string | null;
   address: string | null;
+  lat?: number | null;
+  lng?: number | null;
   cost: number | null;
   currency: string | null;
   cancellationDeadline: string | null;
