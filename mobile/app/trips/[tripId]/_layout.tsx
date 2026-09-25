@@ -22,6 +22,7 @@ export default function TripLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="stop/[itemId]" />
         <Stack.Screen name="details" />
+        <Stack.Screen name="brief" />
         <Stack.Screen name="bookings" />
         <Stack.Screen name="documents" />
         <Stack.Screen name="packing" />

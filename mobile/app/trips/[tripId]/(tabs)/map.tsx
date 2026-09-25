@@ -137,7 +137,7 @@ export default function MapScreen() {
               <Pressable
                 onPress={() => (n ? setSelectedItemId(on ? null : item.id) : router.push({ pathname: "/trips/[tripId]/stop/[itemId]", params: { tripId, itemId: item.id } }))}
                 accessibilityRole="button"
-                accessibilityState={{ selected: on }}
+                aria-selected={on}
                 accessibilityLabel={`${n ? `Stop ${n}, ` : ""}${item.title}${n ? "" : ", no pin"}`}
                 style={({ pressed }) => ({
                   flexDirection: "row",

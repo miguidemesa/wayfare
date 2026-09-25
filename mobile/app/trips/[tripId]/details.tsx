@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { ApiError, deleteTrip } from "@/shared/api";
 import { fmtDay, fmtMoney, GUTTER, space, useTheme } from "@/shared/theme";
 import { tripPhase } from "@/shared/trip";
+import { describeParty } from "@/shared/brief";
 import { useTrip } from "@/lib/trip";
 import { confirmDestructive } from "@/lib/confirm";
 import { SubScreen } from "@/components/trip/SubScreen";
@@ -72,6 +73,12 @@ function Contents({ onDeleteError }: { onDeleteError: (m: string) => void }) {
 
       <SectionLabel style={{ paddingHorizontal: GUTTER, marginTop: space.xl }}>In this trip</SectionLabel>
       <Rule style={{ marginHorizontal: GUTTER }} />
+      <IndexRow
+        icon="sparkles-outline"
+        label="Your trip brief"
+        detail={bundle.brief ? [describeParty(bundle.brief.party), bundle.brief.stays.map((s) => s.hotelName ?? s.area).filter(Boolean).join(", ")].filter(Boolean).join(" · ") : "Tell Wayfare where you’re staying and what you like"}
+        href={`/trips/${tripId}/brief`}
+      />
       <IndexRow icon="bed-outline" label="Bookings" detail={bookingBits.join(" · ") || "Stays, flights and reservations"} href={`/trips/${tripId}/bookings`} />
       <IndexRow icon="document-text-outline" label="Documents" detail={documents.length ? `${documents.length} saved` : "Passport, insurance, tickets"} href={`/trips/${tripId}/documents`} />
       <IndexRow icon="checkbox-outline" label="Packing & to-dos" detail={checklist.length ? `${packed} of ${checklist.length} done` : "Lists for before you go"} href={`/trips/${tripId}/packing`} />

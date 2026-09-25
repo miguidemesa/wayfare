@@ -40,7 +40,8 @@ export function Button({ label, onPress, variant = "primary", size = "md", loadi
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={accessibilityHint}
-      accessibilityState={{ disabled: !!inactive, busy: !!(loading || busy) }}
+      aria-disabled={!!inactive}
+      aria-busy={!!(loading || busy)}
       hitSlop={variant === "quiet" ? 10 : 0}
       style={({ pressed }) => [
         {

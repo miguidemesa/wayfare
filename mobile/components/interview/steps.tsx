@@ -244,7 +244,7 @@ function AreaRow({ area, on, onPress }: { area: StayArea; on: boolean; onPress: 
     <Pressable
       onPress={onPress}
       accessibilityRole="radio"
-      accessibilityState={{ checked: on }}
+      aria-checked={on}
       accessibilityLabel={`${area.name}. ${area.note}`}
       style={({ pressed }) => ({
         flexDirection: "row",

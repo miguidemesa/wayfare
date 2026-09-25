@@ -160,7 +160,7 @@ export default function Packing() {
                   <Pressable
                     onPress={() => toggle(i)}
                     accessibilityRole="checkbox"
-                    accessibilityState={{ checked: i.checked }}
+                    aria-checked={i.checked}
                     style={({ pressed }) => ({ flex: 1, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, opacity: pressed ? 0.6 : 1 })}
                   >
                     <Ionicons name={i.checked ? "checkbox" : "square-outline"} size={22} color={i.checked ? colors.ink3 : colors.ink} />

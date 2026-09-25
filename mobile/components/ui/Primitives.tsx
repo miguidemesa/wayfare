@@ -133,7 +133,7 @@ export function Choices<K extends string>({
             key={o.key}
             onPress={() => onChange(o.key)}
             accessibilityRole="radio"
-            accessibilityState={{ checked: on }}
+            aria-checked={on}
             // 36 visible + 4 above and below = a 44pt target.
             hitSlop={{ top: 4, bottom: 4 }}
             style={({ pressed }) => ({
@@ -176,7 +176,7 @@ export function Toggles<K extends string>({
             key={o.key}
             onPress={() => onChange(on ? values.filter((v) => v !== o.key) : [...values, o.key])}
             accessibilityRole="checkbox"
-            accessibilityState={{ checked: on }}
+            aria-checked={on}
             hitSlop={{ top: 4, bottom: 4 }}
             style={({ pressed }) => ({
               paddingHorizontal: 12,

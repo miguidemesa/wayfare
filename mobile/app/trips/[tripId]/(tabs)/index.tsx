@@ -141,7 +141,7 @@ export default function PlanScreen() {
           onPress={handleLayOut}
           disabled={layingOut}
           accessibilityRole="button"
-          accessibilityState={{ busy: layingOut }}
+          aria-busy={layingOut}
           style={({ pressed }) => ({ paddingHorizontal: GUTTER, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.rule, backgroundColor: pressed ? colors.sunk : colors.raised })}
         >
           <T v="meta" c="ink2">

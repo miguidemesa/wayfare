@@ -117,7 +117,7 @@ function StopDetail() {
         <Pressable
           onPress={toggleBooked}
           accessibilityRole="switch"
-          accessibilityState={{ checked: stop.confirmed }}
+          aria-checked={stop.confirmed}
           style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 10, marginTop: space.lg, paddingVertical: 8, opacity: pressed ? 0.6 : 1 })}
         >
           <Ionicons name={stop.confirmed ? "checkmark-circle" : "ellipse-outline"} size={22} color={stop.confirmed ? colors.positive : colors.ink3} />

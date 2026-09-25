@@ -75,7 +75,7 @@ export function RangeCalendar({
                 key={i}
                 onPress={() => tap(k)}
                 accessibilityRole="button"
-                accessibilityState={{ selected: isEdge || !!inRange }}
+                aria-selected={isEdge || !!inRange}
                 accessibilityLabel={d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
                 style={{ flex: 1, height: 42, alignItems: "center", justifyContent: "center", backgroundColor: inRange ? colors.accentSoft : "transparent" }}
               >

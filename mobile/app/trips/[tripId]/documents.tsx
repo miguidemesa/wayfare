@@ -181,7 +181,7 @@ function AddDoc({ onDone }: { onDone: (doc: DocumentFile | null) => void }) {
       <Choices options={KINDS} value={kind} onChange={setKind} />
       <Field label="Name" value={name} onChangeText={setName} placeholder="Passport — Maria" />
       <Field label="Details" value={content} onChangeText={setContent} placeholder="Number, policy, booking code…" multiline style={{ minHeight: 80, textAlignVertical: "top" }} />
-      <Pressable onPress={() => setSensitive(!sensitive)} accessibilityRole="checkbox" accessibilityState={{ checked: sensitive }} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+      <Pressable onPress={() => setSensitive(!sensitive)} accessibilityRole="checkbox" aria-checked={sensitive} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
         <Ionicons name={sensitive ? "checkbox" : "square-outline"} size={22} color={sensitive ? colors.ink : colors.ink3} />
         <T v="meta">Hide the details until tapped</T>
       </Pressable>

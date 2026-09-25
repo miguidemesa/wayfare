@@ -103,7 +103,7 @@ export function DayStrip({ bundle, value, onChange }: { bundle: TripBundle; valu
               onLayout={(e) => (offsets.current[i] = e.nativeEvent.layout.x)}
               onPress={() => onChange(i)}
               accessibilityRole="tab"
-              accessibilityState={{ selected: on }}
+              aria-selected={on}
               accessibilityLabel={`Day ${i + 1}, ${fmtDay(d.date, { weekday: "long", month: "long", day: "numeric" })}${isToday ? ", today" : ""}`}
               style={{ width: 52, alignItems: "center", paddingTop: 6, paddingBottom: 8, marginHorizontal: 2 }}
             >

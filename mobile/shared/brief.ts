@@ -118,6 +118,59 @@ export function briefFromPreferences(prefs: TravellerPreferences | null): TripBr
   };
 }
 
+// Labels the first mobile app saved, onto the guide's tags (as the server does).
+const INTEREST_ALIASES: Record<string, Interest> = {
+  "food & dining": "Food",
+  "cafes & coffee": "Food",
+  "historic sites": "History",
+  "art & museums": "Culture",
+  "nature & parks": "Nature",
+  "hidden gems": "Culture",
+};
+
+export function normalizeInterests(labels: unknown): Interest[] {
+  if (!Array.isArray(labels)) return [];
+  const out = new Set<Interest>();
+  for (const raw of labels) {
+    if (typeof raw !== "string") continue;
+    const key = raw.trim().toLowerCase();
+    const hit = INTERESTS.find((i) => i.key.toLowerCase() === key)?.key ?? INTEREST_ALIASES[key];
+    if (hit) out.add(hit);
+  }
+  return [...out];
+}
+
+/**
+ * The trip's brief, or — for a trip planned before the interview existed —
+ * a starting point from what the trip already knows.
+ */
+export function briefForTrip(bundle: {
+  brief: TripBrief | null;
+  trip: { pace?: string; interests?: string; travelersCount: number };
+  destinations: { name: string }[];
+  hotels: { id: string; name: string; destinationName: string | null; lat: number | null; lng: number | null }[];
+}): TripBrief {
+  if (bundle.brief) return bundle.brief;
+  const b = emptyBrief();
+  let interests: unknown = [];
+  try {
+    interests = JSON.parse(bundle.trip.interests || "[]");
+  } catch {}
+  const pace = bundle.trip.pace;
+  const cities = bundle.destinations.map((d) => d.name);
+  return {
+    ...b,
+    pace: pace === "relaxed" || pace === "packed" ? pace : "balanced",
+    interests: normalizeInterests(interests),
+    party: { ...b.party, adults: Math.max(1, bundle.trip.travelersCount) },
+    // A hotel with a location is where that city's days start.
+    stays: cities.flatMap((city) => {
+      const h = bundle.hotels.find((x) => x.lat != null && x.lng != null && (x.destinationName ?? cities[0]) === city);
+      return h ? [{ city, hotelName: h.name, hotelId: h.id, placeId: null, lat: h.lat, lng: h.lng, area: null, booked: true }] : [];
+    }),
+  };
+}
+
 export function partySize(brief: Pick<TripBrief, "party">): number {
   return Math.max(1, brief.party.adults + brief.party.childrenAges.length + brief.party.seniors);
 }
