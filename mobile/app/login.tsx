@@ -1,284 +1,140 @@
-import { useState } from "react";
-import {
-  ActivityIndicator,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import { router } from "expo-router";
+import { useRef, useState } from "react";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useAuth } from "@/lib/auth";
 import { ApiError } from "@/shared/api";
-import { TRAVEL_THEME } from "@/shared/theme";
-import { Card } from "@/components/ui/Surface";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { GUTTER, space, useTheme } from "@/shared/theme";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Primitives";
+import { T } from "@/components/ui/T";
 
 export { ErrorFallback as ErrorBoundary } from "@/components/ErrorFallback";
 
+// The demo account's password is in the bundle, so offer it only in
+// development and in builds made for showing the app off.
+const SHOW_DEMO = __DEV__ || process.env.EXPO_PUBLIC_SHOW_DEMO_LOGIN === "1";
+
+// Signing in flips the auth guard in the root layout, which moves the user on
+// to their trips — this screen never navigates by itself.
 export default function Login() {
-  const { signIn, signUp } = useAuth();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const { signIn, signUp, notice } = useAuth();
+  const [mode, setMode] = useState<"signin" | "register">("signin");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("demo@wayfare.app");
-  const [password, setPassword] = useState("wanderlust");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
 
   async function submit() {
     if (busy) return;
+    if (!email.trim() || !password) {
+      setError("Enter your email and password.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      if (mode === "login") {
-        await signIn(email.trim(), password);
-      } else {
-        await signUp(email.trim(), password, name.trim() || undefined);
-      }
-      router.replace("/trips");
+      if (mode === "signin") await signIn(email.trim(), password);
+      else await signUp(email.trim(), password, name.trim() || undefined);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Authentication failed. Please check your credentials.");
-    } finally {
+      setError(e instanceof ApiError ? e.message : "That didn't work. Check your details and try again.");
       setBusy(false);
     }
   }
 
-  function fillDemo() {
-    setEmail("demo@wayfare.app");
-    setPassword("wanderlust");
-    setMode("login");
-  }
-
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={[
-        styles.container,
-        { paddingTop: insets.top, paddingBottom: insets.bottom },
-      ]}
-    >
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.paper }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: GUTTER, paddingTop: insets.top + space.xxxl, paddingBottom: insets.bottom + space.xl }}
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
       >
-        {/* Brand & Editorial Headline */}
-        <View style={styles.heroSection}>
-          <View style={styles.brandRow}>
-            <View style={styles.brandIconBubble}>
-              <Ionicons name="compass" size={16} color={TRAVEL_THEME.colors.terracotta} />
-            </View>
-            <Text style={styles.brandText}>WAYFARE</Text>
-          </View>
+        <T v="entry">Wayfare</T>
+        <T v="display" style={{ marginTop: space.xxl, maxWidth: 360 }}>
+          Your trip, day by day.
+        </T>
+        <T v="body" c="ink2" style={{ marginTop: space.md, maxWidth: 360 }}>
+          Plan each day, see it on the map, and keep track of what you spend — in any currency.
+        </T>
 
-          <Text style={styles.editorialTitle}>
-            Where will you{"\n"}wander next?
-          </Text>
-          <Text style={styles.editorialSubtitle}>
-            Your entire trip in one calm, beautifully organized companion. Itineraries, maps, live currency, and local intelligence.
-          </Text>
-        </View>
-
-        {/* Auth Card */}
-        <Card padding={22} style={styles.authCard}>
-          {/* Mode Switcher */}
-          <SegmentedControl
-            options={[
-              { key: "login", label: "Sign In" },
-              { key: "register", label: "Create Account" },
-            ]}
-            value={mode}
-            onChange={(val) => {
-              setMode(val);
+        <View style={{ marginTop: space.xxl, gap: space.lg, maxWidth: 440 }}>
+          {notice && !error ? (
+            <T v="meta" c="caution" accessibilityLiveRegion="polite">
+              {notice}
+            </T>
+          ) : null}
+          {mode === "register" ? (
+            <Field label="Name" value={name} onChangeText={setName} placeholder="What should we call you?" autoComplete="name" returnKeyType="next" onSubmitEditing={() => emailRef.current?.focus()} />
+          ) : null}
+          <Field
+            ref={emailRef}
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="you@example.com"
+            autoCapitalize="none"
+            autoComplete="email"
+            keyboardType="email-address"
+            textContentType="emailAddress"
+            returnKeyType="next"
+            onSubmitEditing={() => passwordRef.current?.focus()}
+          />
+          <Field
+            ref={passwordRef}
+            label="Password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoComplete={mode === "signin" ? "current-password" : "new-password"}
+            textContentType={mode === "signin" ? "password" : "newPassword"}
+            returnKeyType="go"
+            onSubmitEditing={submit}
+          />
+          {error ? (
+            <T v="meta" c="danger" accessibilityLiveRegion="polite">
+              {error}
+            </T>
+          ) : null}
+          <Button size="lg" label={mode === "signin" ? "Sign in" : "Create account"} loading={busy} onPress={submit} />
+          <Pressable
+            onPress={() => {
+              setMode(mode === "signin" ? "register" : "signin");
               setError(null);
             }}
-            accentColor={TRAVEL_THEME.colors.terracotta}
-          />
-
-          <View style={styles.formFields}>
-            {mode === "register" && (
-              <View>
-                <Text style={styles.fieldLabel}>FULL NAME</Text>
-                <TextInput
-                  value={name}
-                  onChangeText={setName}
-                  placeholder="e.g. Maya Chen"
-                  placeholderTextColor={TRAVEL_THEME.colors.inkDim}
-                  autoCapitalize="words"
-                  style={styles.input}
-                />
-              </View>
-            )}
-
-            <View>
-              <Text style={styles.fieldLabel}>EMAIL ADDRESS</Text>
-              <TextInput
-                value={email}
-                onChangeText={setEmail}
-                placeholder="name@example.com"
-                placeholderTextColor={TRAVEL_THEME.colors.inkDim}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                style={styles.input}
-              />
-            </View>
-
-            <View>
-              <Text style={styles.fieldLabel}>PASSWORD</Text>
-              <TextInput
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Min. 8 characters"
-                placeholderTextColor={TRAVEL_THEME.colors.inkDim}
-                secureTextEntry
-                style={styles.input}
-              />
-            </View>
-
-            {error ? (
-              <View style={styles.errorBox}>
-                <Ionicons name="alert-circle" size={14} color={TRAVEL_THEME.colors.danger} />
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : null}
-
-            <Button
-              label={mode === "login" ? "Sign In to Wayfare" : "Create My Account"}
-              variant="primary"
-              size="lg"
-              loading={busy}
-              onPress={submit}
-              style={{ marginTop: 6 }}
-            />
-
-            <Button
-              label="Explore Demo Account (demo@wayfare.app)"
-              variant="secondary"
-              size="md"
-              onPress={fillDemo}
-              iconLeft={<Ionicons name="flash-outline" size={15} color={TRAVEL_THEME.colors.terracotta} />}
-              style={{ marginTop: 2 }}
-            />
-          </View>
-        </Card>
-
-        {/* Footer info */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            Wayfare Travel OS · Designed for exploration & calm
-          </Text>
+            accessibilityRole="button"
+            hitSlop={8}
+            style={{ alignSelf: "flex-start" }}
+          >
+            <T v="meta" c="ink2">
+              {mode === "signin" ? "New here? " : "Have an account? "}
+              <T v="meta" c="accent">
+                {mode === "signin" ? "Create an account" : "Sign in"}
+              </T>
+            </T>
+          </Pressable>
         </View>
+
+        <View style={{ flex: 1 }} />
+        {SHOW_DEMO ? (
+          <Pressable
+            onPress={() => {
+              setMode("signin");
+              setEmail("demo@wayfare.app");
+              setPassword("wanderlust");
+            }}
+            accessibilityRole="button"
+            hitSlop={8}
+            style={{ marginTop: space.xxl, alignSelf: "flex-start" }}
+          >
+            <T v="small" c="ink3">
+              Just looking? Fill in the demo account
+            </T>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: TRAVEL_THEME.colors.bg,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 24,
-  },
-  heroSection: {
-    marginBottom: 20,
-  },
-  brandRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    marginBottom: 10,
-  },
-  brandIconBubble: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: TRAVEL_THEME.colors.terracottaLight,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  brandText: {
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 2,
-    color: TRAVEL_THEME.colors.terracotta,
-  },
-  editorialTitle: {
-    fontFamily: "Georgia",
-    fontSize: 34,
-    fontWeight: "700",
-    lineHeight: 40,
-    color: TRAVEL_THEME.colors.inkPrimary,
-    letterSpacing: -0.4,
-  },
-  editorialSubtitle: {
-    marginTop: 8,
-    fontSize: 13.5,
-    lineHeight: 20,
-    color: TRAVEL_THEME.colors.inkSecondary,
-    maxWidth: 340,
-  },
-  authCard: {
-    backgroundColor: TRAVEL_THEME.colors.surface,
-    borderColor: TRAVEL_THEME.colors.border,
-    ...TRAVEL_THEME.shadows.card,
-  },
-  formFields: {
-    marginTop: 18,
-    gap: 12,
-  },
-  fieldLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 0.8,
-    color: TRAVEL_THEME.colors.inkMuted,
-    marginBottom: 5,
-  },
-  input: {
-    backgroundColor: TRAVEL_THEME.colors.surfaceWarm,
-    borderWidth: 1,
-    borderColor: TRAVEL_THEME.colors.border,
-    borderRadius: TRAVEL_THEME.radii.md,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: TRAVEL_THEME.colors.inkPrimary,
-  },
-  errorBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: TRAVEL_THEME.colors.dangerLight,
-    borderWidth: 1,
-    borderColor: "#F4D2CE",
-  },
-  errorText: {
-    fontSize: 12,
-    color: TRAVEL_THEME.colors.danger,
-    flex: 1,
-  },
-  footer: {
-    marginTop: 24,
-    alignItems: "center",
-  },
-  footerText: {
-    fontSize: 11.5,
-    fontWeight: "500",
-    color: TRAVEL_THEME.colors.inkDim,
-  },
-});

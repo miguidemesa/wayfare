@@ -18,6 +18,7 @@ import type {
   TripBundle,
   TripSummary,
 } from "./types";
+import { addDays, dayKey, daysBetween, learnServerOffset } from "./trip";
 
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000";
 
@@ -28,6 +29,17 @@ export class ApiError extends Error {
     this.status = status;
   }
 }
+
+// Called when a signed-in request comes back 401: the session expired or was
+// revoked. The auth provider registers this to send the user to sign in.
+let onUnauthorized: (() => void) | null = null;
+export function setUnauthorizedHandler(fn: (() => void) | null) {
+  onUnauthorized = fn;
+}
+
+// A 401 from these is an answer ("wrong password", "not signed in"), not a
+// lost session.
+const AUTH_PATHS = /^\/api\/auth\//;
 
 async function request<T>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {
   const method = init?.method ?? (init?.json ? "POST" : "GET");
@@ -47,6 +59,7 @@ async function request<T>(path: string, init?: RequestInit & { json?: unknown })
     throw new ApiError(0, "Can't reach Wayfare — check your connection.");
   }
   if (!res.ok) {
+    if (res.status === 401 && !AUTH_PATHS.test(path)) onUnauthorized?.();
     let message = `Error ${res.status}`;
     try {
       const data = await res.json();
@@ -85,6 +98,12 @@ export async function logout() {
   await api.post("/api/auth/logout").catch(() => {});
 }
 
+/** The signed-in user, or null. Throws ApiError(0) when the server can't be reached. */
+export async function fetchMe() {
+  const res = await api.get<{ user: { id: string; name: string; email: string } | null }>("/api/auth/me");
+  return res.user;
+}
+
 // ------------------------------------------------------------ trip endpoints
 
 export function fetchTrips() {
@@ -93,11 +112,15 @@ export function fetchTrips() {
 
 function normalizeTripsList(raw: { trips?: TripSummary[] } | TripSummary[]): TripSummary[] {
   const list = Array.isArray(raw) ? raw : (raw.trips ?? []);
+  // Before any date on screen is read — see dayKey() in trip.ts.
+  if (list[0]) learnServerOffset(list[0].startDate);
   return [...list].sort((a, b) => a.startDate.localeCompare(b.startDate));
 }
 
-export function fetchTripBundle(tripId: string) {
-  return api.get<TripBundle>(`/api/trips/${tripId}`);
+export async function fetchTripBundle(tripId: string) {
+  const bundle = await api.get<TripBundle>(`/api/trips/${tripId}`);
+  learnServerOffset(bundle.trip.startDate);
+  return bundle;
 }
 
 export function createTrip(payload: CreateTripPayload) {
@@ -118,7 +141,8 @@ export function addItineraryItem(
     title: string;
     startTime?: string;
     durationMin?: number;
-    placeName?: string;
+    /** Links the stop to a place from /places — the only way it gets coordinates. */
+    poiId?: string;
     cost?: number;
     currency?: string;
     notes?: string;
@@ -140,9 +164,50 @@ export function updateItineraryItem(
     notes?: string | null;
     confirmed?: boolean;
     type?: string;
+    moveToDayId?: string;
   }
 ) {
   return api.patch<{ item: ItineraryItem }>(`/api/items/${itemId}`, payload);
+}
+
+export function createDay(tripId: string, date: string, city?: string) {
+  return api.post<{ day: { id: string } }>(`/api/trips/${tripId}/itinerary`, { kind: "day", date, city });
+}
+
+/** A generous ceiling so a mistyped year can't create thousands of days. */
+export const MAX_TRIP_DAYS = 366;
+
+/**
+ * Create a day for every date in the trip that doesn't have one yet. New trips
+ * start with no days, and stops can only be added to a day. Takes YYYY-MM-DD
+ * keys (use dayKey() on a trip's dates). One request at a time: the server
+ * numbers each new day from the ones already there.
+ */
+export async function layOutDays(
+  tripId: string,
+  startKey: string,
+  endKey: string,
+  existing: { date: string }[],
+  /** One city, or several split across the trip in order. */
+  cities?: string | string[]
+) {
+  const have = new Set(existing.map((d) => dayKey(d.date)));
+  const total = Math.min(daysBetween(startKey, endKey) + 1, MAX_TRIP_DAYS);
+  const list = cities == null ? [] : Array.isArray(cities) ? cities : [cities];
+  let created = 0;
+  for (let n = 0; n < total; n++) {
+    const key = addDays(startKey, n);
+    if (have.has(key)) continue;
+    const city = list.length ? list[Math.min(list.length - 1, Math.floor((n * list.length) / total))] : undefined;
+    await createDay(tripId, key, city);
+    created++;
+  }
+  return created;
+}
+
+/** Persist a day's full stop order. */
+export function reorderDay(tripId: string, dayId: string, itemIds: string[]) {
+  return api.patch<{ ok: boolean }>(`/api/trips/${tripId}/itinerary`, { dayId, itemIds });
 }
 
 export function deleteItineraryItem(itemId: string) {
@@ -186,6 +251,22 @@ export function addExpense(
   return api.post<{ expense: Expense }>(`/api/trips/${tripId}/expenses`, payload);
 }
 
+/** Send only what changed: a new amount or currency is re-converted at today's rate. */
+export function updateExpense(
+  expenseId: string,
+  payload: {
+    merchant?: string;
+    amount?: number;
+    currency?: string;
+    category?: string;
+    date?: string;
+    paymentMethod?: string;
+    description?: string | null;
+  }
+) {
+  return api.patch<{ expense: Expense }>(`/api/expenses/${expenseId}`, payload);
+}
+
 export function deleteExpense(expenseId: string) {
   return api.delete<{ ok: boolean }>(`/api/expenses/${expenseId}`);
 }
@@ -208,7 +289,7 @@ export function addChecklistItem(
 }
 
 export function deleteChecklistItem(tripId: string, id: string) {
-  return api.delete<{ ok: boolean }>(`/api/trips/${tripId}/checklist?id=${id}`);
+  return api.delete<{ ok: boolean }>(`/api/trips/${tripId}/checklist?id=${encodeURIComponent(id)}`);
 }
 
 export function generatePackingList(tripId: string) {
@@ -238,7 +319,7 @@ export function addDocumentNote(
 }
 
 export function deleteDocument(tripId: string, id: string) {
-  return api.delete<{ ok: boolean }>(`/api/trips/${tripId}/documents?id=${id}`);
+  return api.delete<{ ok: boolean }>(`/api/trips/${tripId}/documents?id=${encodeURIComponent(id)}`);
 }
 
 // ----------------------------------------------------- reservations endpoints
@@ -264,7 +345,7 @@ export function addReservation(
 }
 
 export function deleteReservation(tripId: string, id: string) {
-  return api.delete<{ ok: boolean }>(`/api/trips/${tripId}/reservations?id=${id}`);
+  return api.delete<{ ok: boolean }>(`/api/trips/${tripId}/reservations?id=${encodeURIComponent(id)}`);
 }
 
 export function addHotel(
@@ -285,7 +366,7 @@ export function addHotel(
 }
 
 export function deleteHotel(tripId: string, id: string) {
-  return api.delete<{ ok: boolean }>(`/api/trips/${tripId}/hotels?id=${id}`);
+  return api.delete<{ ok: boolean }>(`/api/trips/${tripId}/hotels?id=${encodeURIComponent(id)}`);
 }
 
 export function addFlight(
@@ -309,7 +390,7 @@ export function addFlight(
 }
 
 export function deleteFlight(tripId: string, id: string) {
-  return api.delete<{ ok: boolean }>(`/api/trips/${tripId}/flights?id=${id}`);
+  return api.delete<{ ok: boolean }>(`/api/trips/${tripId}/flights?id=${encodeURIComponent(id)}`);
 }
 
 // ---------------------------------------------------------- places endpoints
@@ -344,7 +425,7 @@ export function savePlace(tripId: string, poiId: string) {
 }
 
 export function deleteSavedPlace(tripId: string, id: string) {
-  return api.delete<{ ok: boolean }>(`/api/trips/${tripId}/saved-places?id=${id}`);
+  return api.delete<{ ok: boolean }>(`/api/trips/${tripId}/saved-places?id=${encodeURIComponent(id)}`);
 }
 
 // --------------------------------------------------------- journal endpoints
@@ -367,11 +448,62 @@ export function addJournalEntry(
 }
 
 export function deleteJournalEntry(tripId: string, id: string) {
-  return api.delete<{ ok: boolean }>(`/api/trips/${tripId}/journal?id=${id}`);
+  return api.delete<{ ok: boolean }>(`/api/trips/${tripId}/journal?id=${encodeURIComponent(id)}`);
 }
 
 // -------------------------------------------------------- currency endpoints
 
 export function fetchCurrencyRates() {
   return api.get<CurrencyRateResponse>("/api/currency");
+}
+// ------------------------------------------------------------ concierge
+
+export type ConciergeMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt?: string;
+};
+
+export function fetchConversation(tripId: string) {
+  return api.get<{ activeConversationId: string | null; messages: ConciergeMessage[] }>(
+    `/api/trips/${tripId}/ai`
+  );
+}
+
+/** Ask the trip concierge. It can edit the itinerary itself (toolsUsed says what it did). */
+export function askConcierge(tripId: string, message: string, conversationId: string | null) {
+  return api.post<{ conversationId: string; content: string; toolsUsed: string[] }>(
+    `/api/trips/${tripId}/ai`,
+    { message, conversationId }
+  );
+}
+
+// ------------------------------------------------------------ geocoding
+
+export type Place = { name: string; country: string; admin: string | null; lat: number; lng: number };
+
+/** City search via Open-Meteo's free geocoder (no key). */
+export async function searchCities(query: string): Promise<Place[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+  let res: Response;
+  try {
+    res = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?count=6&language=en&format=json&name=${encodeURIComponent(q)}`
+    );
+  } catch {
+    throw new ApiError(0, "Can't search places offline.");
+  }
+  if (!res.ok) throw new ApiError(res.status, "Place search is unavailable right now.");
+  const data = (await res.json()) as {
+    results?: { name: string; country?: string; admin1?: string; latitude: number; longitude: number }[];
+  };
+  return (data.results ?? []).map((r) => ({
+    name: r.name,
+    country: r.country ?? "",
+    admin: r.admin1 ?? null,
+    lat: r.latitude,
+    lng: r.longitude,
+  }));
 }

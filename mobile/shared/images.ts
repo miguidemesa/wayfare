@@ -80,11 +80,20 @@ export const CATEGORY_PLACEHOLDERS: Record<string, string> = {
 
 export function getDestinationImages(cityOrCountry: string): { hero: string; thumb: string; gallery: string[] } {
   const norm = (cityOrCountry || "").toLowerCase().trim();
-  if (norm.includes("tokyo") || norm.includes("japan") || norm.includes("osaka")) return DESTINATION_IMAGES.tokyo;
-  if (norm.includes("kyoto") || norm.includes("nara")) return DESTINATION_IMAGES.kyoto;
-  if (norm.includes("paris") || norm.includes("france") || norm.includes("nice") || norm.includes("lyon")) return DESTINATION_IMAGES.paris;
-  if (norm.includes("rome") || norm.includes("italy") || norm.includes("florence") || norm.includes("venice")) return DESTINATION_IMAGES.rome;
+  if (norm.includes("tokyo") || norm.includes("japan")) return DESTINATION_IMAGES.tokyo;
+  if (norm.includes("kyoto")) return DESTINATION_IMAGES.kyoto;
+  if (norm.includes("paris") || norm.includes("france")) return DESTINATION_IMAGES.paris;
+  if (norm.includes("rome") || norm.includes("italy")) return DESTINATION_IMAGES.rome;
   if (norm.includes("manila") || norm.includes("philippin") || norm.includes("palawan") || norm.includes("cebu") || norm.includes("boracay")) return DESTINATION_IMAGES.manila;
-  if (norm.includes("seoul") || norm.includes("korea") || norm.includes("busan") || norm.includes("jeju")) return DESTINATION_IMAGES.seoul;
+  if (norm.includes("seoul") || norm.includes("korea")) return DESTINATION_IMAGES.seoul;
   return DESTINATION_IMAGES.generic;
+}
+
+/**
+ * A real photo of the destination, or null when we don't have one — better
+ * no picture than a stock image of somewhere else.
+ */
+export function destinationPhoto(cityOrCountry: string): { hero: string; thumb: string } | null {
+  const img = getDestinationImages(cityOrCountry);
+  return img === DESTINATION_IMAGES.generic ? null : img;
 }

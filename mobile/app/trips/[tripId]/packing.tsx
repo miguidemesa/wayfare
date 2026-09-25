@@ -1,64 +1,46 @@
-import { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import { Stack, useLocalSearchParams } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Pressable, ScrollView, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  addChecklistItem,
-  deleteChecklistItem,
-  fetchChecklist,
-  generatePackingList,
-  toggleChecklistItem,
-} from "@/shared/api";
-import { TABULAR_NUMS, TRAVEL_THEME } from "@/shared/theme";
+import { addChecklistItem, ApiError, deleteChecklistItem, fetchChecklist, generatePackingList, toggleChecklistItem } from "@/shared/api";
+import { GUTTER, space, useTheme } from "@/shared/theme";
 import type { ChecklistItem } from "@/shared/types";
-import { Header } from "@/components/Header";
-import { BottomNav } from "@/components/BottomNav";
-import { Card, Surface } from "@/components/ui/Surface";
-import { Badge } from "@/components/ui/Badge";
+import { useTrip } from "@/lib/trip";
+import { SubScreen } from "@/components/trip/SubScreen";
 import { Button } from "@/components/ui/Button";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { SheetHandle } from "@/components/GlassView";
-
-const CATEGORIES = ["Essentials", "Clothing", "Toiletries", "Electronics", "Documents", "Medication", "Other"];
+import { Choices, Empty, Field, SectionLabel } from "@/components/ui/Primitives";
+import { T } from "@/components/ui/T";
+import { useToast } from "@/components/ui/Toast";
 
 export { ErrorFallback as ErrorBoundary } from "@/components/ErrorFallback";
 
-export default function PackingScreen() {
-  const { tripId } = useLocalSearchParams<{ tripId: string }>();
-  const insets = useSafeAreaInsets();
-  const [items, setItems] = useState<ChecklistItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"PACKING" | "BEFORE_TRIP">("PACKING");
-  const [generating, setGenerating] = useState(false);
+type Section = "PACKING" | "BEFORE_TRIP";
+const CATEGORIES = ["Essentials", "Clothing", "Toiletries", "Electronics", "Documents", "Medication", "Other"].map((c) => ({ key: c, label: c }));
 
-  // Add Item Modal
-  const [modalVisible, setModalVisible] = useState(false);
-  const [newText, setNewText] = useState("");
-  const [newCategory, setNewCategory] = useState("Essentials");
-  const [saving, setSaving] = useState(false);
+const SECTIONS: { key: Section; label: string }[] = [
+  { key: "PACKING", label: "Packing" },
+  { key: "BEFORE_TRIP", label: "Before you go" },
+];
+
+export default function Packing() {
+  const { colors } = useTheme();
+  const toast = useToast();
+  const { tripId, reload: reloadTrip } = useTrip();
+  const [items, setItems] = useState<ChecklistItem[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [section, setSection] = useState<Section>("PACKING");
+  const [text, setText] = useState("");
+  const [category, setCategory] = useState("Essentials");
+  const [adding, setAdding] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const res = await fetchChecklist(tripId);
       setItems(res.checklist);
-    } catch {} finally {
-      setLoading(false);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Couldn't load your lists.");
     }
   }, [tripId]);
 
@@ -66,486 +48,139 @@ export default function PackingScreen() {
     void load();
   }, [load]);
 
-  const filteredItems = items.filter((i) =>
-    activeTab === "PACKING" ? i.section !== "BEFORE_TRIP" : i.section === "BEFORE_TRIP"
-  );
+  const visible = useMemo(() => (items ?? []).filter((i) => i.section === section), [items, section]);
+  const groups = useMemo(() => {
+    const m = new Map<string, ChecklistItem[]>();
+    for (const i of visible) {
+      const k = i.category || "General";
+      m.set(k, [...(m.get(k) ?? []), i]);
+    }
+    return [...m.entries()];
+  }, [visible]);
+  const done = visible.filter((i) => i.checked).length;
 
-  const total = filteredItems.length;
-  const packedCount = filteredItems.filter((i) => i.checked).length;
-  const pct = total > 0 ? Math.round((packedCount / total) * 100) : 0;
-
-  async function handleToggle(item: ChecklistItem) {
-    const updated = !item.checked;
-    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, checked: updated } : i)));
+  async function toggle(item: ChecklistItem) {
+    setItems((xs) => xs?.map((x) => (x.id === item.id ? { ...x, checked: !x.checked } : x)) ?? null);
     try {
-      await toggleChecklistItem(tripId, item.id, updated);
+      await toggleChecklistItem(tripId, item.id, !item.checked);
+      void reloadTrip();
     } catch {
+      toast("Couldn't update that", "error");
       void load();
     }
   }
 
-  async function handleDelete(id: string, text: string) {
-    setItems((prev) => prev.filter((i) => i.id !== id));
+  async function remove(item: ChecklistItem) {
+    setItems((xs) => xs?.filter((x) => x.id !== item.id) ?? null);
     try {
-      await deleteChecklistItem(tripId, id);
+      await deleteChecklistItem(tripId, item.id);
     } catch {
+      toast("Couldn't remove that", "error");
       void load();
     }
   }
 
-  async function handleAdd() {
-    if (!newText.trim()) return;
-    setSaving(true);
+  async function add() {
+    const t = text.trim();
+    if (!t || adding) return;
+    setAdding(true);
     try {
-      const res = await addChecklistItem(tripId, {
-        text: newText.trim(),
-        category: newCategory,
-        section: activeTab,
-      });
-      setItems((prev) => [...prev, res.item]);
-      setModalVisible(false);
-      setNewText("");
+      const res = await addChecklistItem(tripId, { text: t, section, category: section === "PACKING" ? category : undefined });
+      setItems((xs) => [...(xs ?? []), res.item]);
+      setText("");
+      void reloadTrip();
     } catch {
-      Alert.alert("Error", "Could not add item.");
+      toast("Couldn't add that", "error");
     } finally {
-      setSaving(false);
+      setAdding(false);
     }
   }
 
-  async function handleSmartGenerate() {
+  async function generate() {
     setGenerating(true);
     try {
-      await generatePackingList(tripId);
+      const res = await generatePackingList(tripId);
       await load();
-      Alert.alert("Smart Checklist Ready!", "Tailored packing recommendations generated for your trip destination and weather.");
-    } catch {
-      Alert.alert("Notice", "Checklist updated.");
+      void reloadTrip();
+      toast(res.generated ? `Added ${res.generated} items for your trip` : "Your lists already cover it");
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : "Couldn't suggest items right now", "error");
     } finally {
       setGenerating(false);
     }
   }
 
-  // Group items by category
-  const grouped = filteredItems.reduce<Record<string, ChecklistItem[]>>((acc, item) => {
-    const cat = item.category || "General";
-    acc[cat] = acc[cat] || [];
-    acc[cat].push(item);
-    return acc;
-  }, {});
-
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <Stack.Screen options={{ headerShown: false }} />
-
-      {/* Editorial Header */}
-      <Header
-        eyebrow="TRIP PREPARATION"
-        title="Smart Checklist"
-        rightAction={
-          <Button
-            label="Add"
-            iconLeft={<Ionicons name="add" size={16} color="#FFFFFF" />}
-            variant="primary"
-            size="sm"
-            onPress={() => setModalVisible(true)}
-          />
-        }
-      />
-
-      {/* Filter Tabs */}
-      <View style={styles.tabBar}>
-        <SegmentedControl
-          options={[
-            { key: "PACKING", label: `Luggage (${items.filter((i) => i.section !== "BEFORE_TRIP").length})` },
-            { key: "BEFORE_TRIP", label: `Before Trip Tasks (${items.filter((i) => i.section === "BEFORE_TRIP").length})` },
-          ]}
-          value={activeTab}
-          onChange={setActiveTab}
-          accentColor={TRAVEL_THEME.colors.terracotta}
-        />
+    <SubScreen
+      title="Packing & to-dos"
+      intro={visible.length ? `${done} of ${visible.length} done` : undefined}
+      refreshing={refreshing}
+      onRefresh={async () => {
+        setRefreshing(true);
+        await load();
+        setRefreshing(false);
+      }}
+    >
+      <View style={{ paddingHorizontal: GUTTER, gap: space.md }}>
+        <Choices options={SECTIONS} value={section} onChange={setSection} />
+        <View style={{ flexDirection: "row", gap: space.sm, alignItems: "flex-start" }}>
+          <View style={{ flex: 1 }}>
+            <Field value={text} onChangeText={setText} placeholder={section === "PACKING" ? "Add something to pack" : "Add a to-do"} onSubmitEditing={add} returnKeyType="done" accessibilityLabel="New item" />
+          </View>
+          <Button label="Add" onPress={add} loading={adding} style={{ height: 46 }} />
+        </View>
+        {section === "PACKING" && text.trim() ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <Choices options={CATEGORIES} value={category} onChange={setCategory} wrap={false} />
+          </ScrollView>
+        ) : null}
       </View>
 
-      {loading ? (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator color={TRAVEL_THEME.colors.terracotta} size="large" />
+      {error ? (
+        <T v="meta" c="danger" style={{ paddingHorizontal: GUTTER, marginTop: space.lg }}>
+          {error}
+        </T>
+      ) : items && visible.length === 0 ? (
+        <View style={{ paddingHorizontal: GUTTER }}>
+          <Empty
+            title={section === "PACKING" ? "Nothing on the list" : "No to-dos"}
+            body="Add your own, or let Wayfare suggest a list from the destination, the season and how long you're away."
+            action={generating ? "Suggesting…" : "Suggest a list"}
+            onAction={generating ? undefined : generate}
+          />
         </View>
       ) : (
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={async () => {
-                setRefreshing(true);
-                await load();
-                setRefreshing(false);
-              }}
-              tintColor={TRAVEL_THEME.colors.terracotta}
-            />
-          }
-        >
-          {/* Progress Card */}
-          <Card padding={16} style={styles.progressCard}>
-            <View style={styles.progressHeader}>
-              <View>
-                <Text style={styles.progressEyebrow}>PACKING COMPLETION</Text>
-                <Text style={[styles.progressPct, TABULAR_NUMS]}>{pct}% Ready</Text>
-                <Text style={styles.progressSub}>
-                  {packedCount} of {total} items checked
-                </Text>
-              </View>
-
-              <Button
-                label="AI Suggest"
-                iconLeft={<Ionicons name="sparkles" size={14} color="#FFFFFF" />}
-                variant="primary"
-                size="sm"
-                loading={generating}
-                onPress={handleSmartGenerate}
-              />
-            </View>
-
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressBar, { width: `${pct}%` }]} />
-            </View>
-          </Card>
-
-          {total === 0 ? (
-            <EmptyState
-              icon={<Ionicons name="bag-outline" size={44} color={TRAVEL_THEME.colors.terracotta} />}
-              title="No items on this checklist"
-              description="Keep your bags organized and avoid leaving essentials behind. Generate a weather-aware packing list or add custom items."
-              actionLabel="✨ AI Smart Packing List"
-              onAction={handleSmartGenerate}
-              secondaryLabel="+ Add Custom Item"
-              onSecondaryAction={() => setModalVisible(true)}
-            />
-          ) : (
-            <View style={styles.categoriesList}>
-              {Object.entries(grouped).map(([categoryName, catItems]) => (
-                <View key={categoryName} style={styles.categoryBlock}>
-                  <Text style={styles.categoryTitle}>{categoryName.toUpperCase()}</Text>
-                  <Card padding={10} style={styles.itemsCard}>
-                    {catItems.map((item) => (
-                      <TouchableOpacity
-                        key={item.id}
-                        onPress={() => handleToggle(item)}
-                        activeOpacity={0.7}
-                        style={[
-                          styles.itemRow,
-                          item.checked && styles.itemRowChecked,
-                        ]}
-                      >
-                        <View
-                          style={[
-                            styles.checkbox,
-                            item.checked && styles.checkboxChecked,
-                          ]}
-                        >
-                          {item.checked && (
-                            <Ionicons name="checkmark" size={13} color="#FFFFFF" />
-                          )}
-                        </View>
-
-                        <Text
-                          style={[
-                            styles.itemText,
-                            item.checked && styles.itemTextChecked,
-                          ]}
-                          numberOfLines={2}
-                        >
-                          {item.text}
-                        </Text>
-
-                        {item.aiGenerated && (
-                          <Badge label="AI" variant="forest" size="sm" />
-                        )}
-
-                        <TouchableOpacity
-                          onPress={() => handleDelete(item.id, item.text)}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          style={styles.deleteBtn}
-                        >
-                          <Ionicons name="close" size={15} color={TRAVEL_THEME.colors.inkDim} />
-                        </TouchableOpacity>
-                      </TouchableOpacity>
-                    ))}
-                  </Card>
+        <View style={{ marginTop: space.lg }}>
+          {groups.map(([cat, list]) => (
+            <View key={cat} style={{ marginBottom: space.lg }}>
+              <SectionLabel style={{ paddingHorizontal: GUTTER }}>{cat}</SectionLabel>
+              {list.map((i) => (
+                <View key={i.id} style={{ flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: colors.rule, marginHorizontal: GUTTER }}>
+                  <Pressable
+                    onPress={() => toggle(i)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: i.checked }}
+                    style={({ pressed }) => ({ flex: 1, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, opacity: pressed ? 0.6 : 1 })}
+                  >
+                    <Ionicons name={i.checked ? "checkbox" : "square-outline"} size={22} color={i.checked ? colors.ink3 : colors.ink} />
+                    <T v="body" c={i.checked ? "ink3" : "ink"} style={{ flex: 1, textDecorationLine: i.checked ? "line-through" : "none" }}>
+                      {i.text}
+                    </T>
+                  </Pressable>
+                  <Pressable onPress={() => remove(i)} hitSlop={10} accessibilityRole="button" accessibilityLabel={`Remove ${i.text}`} style={{ padding: 6 }}>
+                    <Ionicons name="close" size={18} color={colors.ink3} />
+                  </Pressable>
                 </View>
               ))}
             </View>
-          )}
-        </ScrollView>
-      )}
-
-      {/* Floating Bottom Nav */}
-      <BottomNav tripId={tripId} activeTab="wallet" accentColor={TRAVEL_THEME.colors.terracotta} />
-
-      {/* Add Item Modal Bottom Sheet */}
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={styles.modalBackdrop}
-        >
-          <View style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
-            <SheetHandle />
-
-            <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Add Checklist Item</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close" size={20} color={TRAVEL_THEME.colors.inkMuted} />
-              </TouchableOpacity>
+          ))}
+          {visible.length ? (
+            <View style={{ paddingHorizontal: GUTTER }}>
+              <Button variant="quiet" label={generating ? "Suggesting…" : "Suggest more items"} onPress={generating ? undefined : generate} />
             </View>
-
-            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
-              {/* Category Picker */}
-              <Text style={styles.fieldLabel}>CATEGORY</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-                <View style={{ flexDirection: "row", gap: 6 }}>
-                  {CATEGORIES.map((c) => (
-                    <TouchableOpacity
-                      key={c}
-                      onPress={() => setNewCategory(c)}
-                      style={[
-                        styles.catChip,
-                        newCategory === c && styles.catChipActive,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.catChipText,
-                          newCategory === c && styles.catChipTextActive,
-                        ]}
-                      >
-                        {c}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
-
-              {/* Item Text */}
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>ITEM DESCRIPTION</Text>
-                <TextInput
-                  value={newText}
-                  onChangeText={setNewText}
-                  placeholder="e.g. Universal power adapter, Noise-cancelling headphones"
-                  placeholderTextColor={TRAVEL_THEME.colors.inkDim}
-                  style={styles.input}
-                />
-              </View>
-            </ScrollView>
-
-            <Button
-              label="Add to Checklist"
-              variant="primary"
-              size="lg"
-              loading={saving}
-              onPress={handleAdd}
-              style={{ marginTop: 14 }}
-            />
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-    </View>
+          ) : null}
+        </View>
+      )}
+    </SubScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: TRAVEL_THEME.colors.bg,
-  },
-  centerContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: TRAVEL_THEME.colors.bg,
-  },
-  tabBar: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: TRAVEL_THEME.colors.bg,
-    borderBottomWidth: 1,
-    borderBottomColor: TRAVEL_THEME.colors.border,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 110,
-    gap: 16,
-  },
-  progressCard: {
-    backgroundColor: TRAVEL_THEME.colors.surface,
-    borderColor: TRAVEL_THEME.colors.border,
-    ...TRAVEL_THEME.shadows.card,
-  },
-  progressHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  progressEyebrow: {
-    fontSize: 9.5,
-    fontWeight: "800",
-    letterSpacing: 1.2,
-    color: TRAVEL_THEME.colors.inkMuted,
-  },
-  progressPct: {
-    fontFamily: "Georgia",
-    fontSize: 22,
-    fontWeight: "700",
-    color: TRAVEL_THEME.colors.inkPrimary,
-    marginTop: 2,
-  },
-  progressSub: {
-    fontSize: 12,
-    color: TRAVEL_THEME.colors.inkMuted,
-    marginTop: 1,
-  },
-  progressTrack: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: TRAVEL_THEME.colors.bgMuted,
-    overflow: "hidden",
-    marginTop: 12,
-  },
-  progressBar: {
-    height: "100%",
-    borderRadius: 3,
-    backgroundColor: TRAVEL_THEME.colors.forest,
-  },
-  categoriesList: {
-    gap: 14,
-  },
-  categoryBlock: {
-    gap: 6,
-  },
-  categoryTitle: {
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 1.2,
-    color: TRAVEL_THEME.colors.inkMuted,
-    paddingHorizontal: 2,
-  },
-  itemsCard: {
-    backgroundColor: TRAVEL_THEME.colors.surface,
-    paddingVertical: 4,
-  },
-  itemRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: TRAVEL_THEME.colors.borderSubtle,
-    gap: 10,
-  },
-  itemRowChecked: {
-    opacity: 0.6,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: TRAVEL_THEME.colors.borderStrong,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FFFFFF",
-  },
-  checkboxChecked: {
-    backgroundColor: TRAVEL_THEME.colors.forest,
-    borderColor: TRAVEL_THEME.colors.forest,
-  },
-  itemText: {
-    fontSize: 14,
-    color: TRAVEL_THEME.colors.inkPrimary,
-    flex: 1,
-  },
-  itemTextChecked: {
-    textDecorationLine: "line-through",
-    color: TRAVEL_THEME.colors.inkMuted,
-  },
-  deleteBtn: {
-    padding: 4,
-  },
-  modalBackdrop: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(28, 25, 23, 0.45)",
-  },
-  modalSheet: {
-    backgroundColor: TRAVEL_THEME.colors.surface,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    borderWidth: 1,
-    borderColor: TRAVEL_THEME.colors.border,
-    ...TRAVEL_THEME.shadows.modal,
-  },
-  modalHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: TRAVEL_THEME.colors.borderSubtle,
-    marginBottom: 10,
-  },
-  modalTitle: {
-    fontFamily: "Georgia",
-    fontSize: 18,
-    fontWeight: "700",
-    color: TRAVEL_THEME.colors.inkPrimary,
-  },
-  fieldLabel: {
-    fontSize: 9.5,
-    fontWeight: "700",
-    letterSpacing: 0.8,
-    color: TRAVEL_THEME.colors.inkMuted,
-    marginBottom: 5,
-  },
-  catChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: TRAVEL_THEME.colors.surfaceWarm,
-    borderWidth: 1,
-    borderColor: TRAVEL_THEME.colors.border,
-  },
-  catChipActive: {
-    backgroundColor: TRAVEL_THEME.colors.terracottaLight,
-    borderColor: "#F0D7D0",
-  },
-  catChipText: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: TRAVEL_THEME.colors.inkSecondary,
-  },
-  catChipTextActive: {
-    fontWeight: "700",
-    color: TRAVEL_THEME.colors.terracottaDark,
-  },
-  fieldGroup: {
-    marginBottom: 12,
-  },
-  input: {
-    backgroundColor: TRAVEL_THEME.colors.surfaceWarm,
-    borderWidth: 1,
-    borderColor: TRAVEL_THEME.colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 13.5,
-    color: TRAVEL_THEME.colors.inkPrimary,
-  },
-});

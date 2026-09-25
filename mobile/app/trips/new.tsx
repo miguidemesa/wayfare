@@ -1,555 +1,316 @@
-import { useState } from "react";
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import { router, Stack } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
+import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { createTrip, ApiError } from "@/shared/api";
-import { TABULAR_NUMS, TRAVEL_THEME } from "@/shared/theme";
-import { SUPPORTED_CURRENCIES } from "@/shared/types";
-import { Header } from "@/components/Header";
-import { Card } from "@/components/ui/Surface";
+import { ApiError, createTrip, layOutDays, searchCities, type Place } from "@/shared/api";
+import { fmtDate, GUTTER, radii, space, useTheme } from "@/shared/theme";
+import { SheetBar } from "@/components/ui/Bars";
 import { Button } from "@/components/ui/Button";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
-
-const POPULAR_DESTINATIONS = [
-  { name: "Tokyo", country: "Japan", lat: 35.6762, lng: 139.6503, emoji: "⛩️", theme: "japan" },
-  { name: "Kyoto", country: "Japan", lat: 35.0116, lng: 135.7681, emoji: "🌸", theme: "japan" },
-  { name: "Paris", country: "France", lat: 48.8566, lng: 2.3522, emoji: "🥐", theme: "france" },
-  { name: "Rome", country: "Italy", lat: 41.9028, lng: 12.4964, emoji: "🍝", theme: "italy" },
-  { name: "Manila", country: "Philippines", lat: 14.5995, lng: 120.9842, emoji: "🏝️", theme: "philippines" },
-  { name: "Seoul", country: "South Korea", lat: 37.5665, lng: 126.978, emoji: "🌆", theme: "korea" },
-];
-
-const INTEREST_OPTIONS = [
-  "Food & Dining",
-  "Historic Sites",
-  "Cafes & Coffee",
-  "Photography",
-  "Art & Museums",
-  "Shopping",
-  "Nature & Parks",
-  "Nightlife",
-  "Hidden Gems",
-];
+import { Choices, Field, Rule } from "@/components/ui/Primitives";
+import { RangeCalendar } from "@/components/ui/RangeCalendar";
+import { T } from "@/components/ui/T";
 
 export { ErrorFallback as ErrorBoundary } from "@/components/ErrorFallback";
 
-export default function NewTripScreen() {
-  const insets = useSafeAreaInsets();
+const HOME_CURRENCIES = ["USD", "EUR", "GBP", "PHP", "JPY", "AUD", "CAD", "SGD", "KRW"].map((c) => ({ key: c, label: c }));
+const PACES = [
+  { key: "relaxed" as const, label: "Relaxed" },
+  { key: "balanced" as const, label: "Balanced" },
+  { key: "packed" as const, label: "Packed" },
+];
+// Quick picks from the previous version; the emoji and theme feed the web
+// app's trip covers.
+const POPULAR: (Place & { emoji: string; theme: string })[] = [
+  { name: "Tokyo", country: "Japan", admin: null, lat: 35.6762, lng: 139.6503, emoji: "⛩️", theme: "japan" },
+  { name: "Kyoto", country: "Japan", admin: null, lat: 35.0116, lng: 135.7681, emoji: "🌸", theme: "japan" },
+  { name: "Paris", country: "France", admin: null, lat: 48.8566, lng: 2.3522, emoji: "🥐", theme: "france" },
+  { name: "Rome", country: "Italy", admin: null, lat: 41.9028, lng: 12.4964, emoji: "🍝", theme: "italy" },
+  { name: "Manila", country: "Philippines", admin: null, lat: 14.5995, lng: 120.9842, emoji: "🏝️", theme: "philippines" },
+  { name: "Seoul", country: "South Korea", admin: null, lat: 37.5665, lng: 126.978, emoji: "🌆", theme: "korea" },
+];
 
-  const defaultStart = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
-  const defaultEnd = new Date(Date.now() + 21 * 86400000).toISOString().slice(0, 10);
+const INTERESTS = ["Food & Dining", "Historic Sites", "Cafes & Coffee", "Art & Museums", "Nature & Parks", "Shopping", "Nightlife", "Photography", "Hidden Gems"];
 
-  const [destCity, setDestCity] = useState("Tokyo");
-  const [destCountry, setDestCountry] = useState("Japan");
-  const [lat, setLat] = useState(35.6762);
-  const [lng, setLng] = useState(139.6503);
-  const [title, setTitle] = useState("Tokyo Autumn");
-  const [startDate, setStartDate] = useState(defaultStart);
-  const [endDate, setEndDate] = useState(defaultEnd);
-  const [budgetAmount, setBudgetAmount] = useState("120000");
-  const [homeCurrency, setHomeCurrency] = useState("USD");
+export default function NewTrip() {
+  const { colors } = useTheme();
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<Place[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [places, setPlaces] = useState<Place[]>([]);
+  const [start, setStart] = useState<string | null>(null);
+  const [end, setEnd] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+  const [budget, setBudget] = useState("");
+  const [home, setHome] = useState("USD");
   const [pace, setPace] = useState<"relaxed" | "balanced" | "packed">("balanced");
-  const [travelersCount, setTravelersCount] = useState(1);
-  const [interests, setInterests] = useState<string[]>([
-    "Food & Dining",
-    "Historic Sites",
-    "Photography",
-  ]);
-  const [coverEmoji, setCoverEmoji] = useState("⛩️");
-  const [coverTheme, setCoverTheme] = useState("japan");
-  const [busy, setBusy] = useState(false);
+  const [interests, setInterests] = useState<string[]>(["Food & Dining", "Historic Sites"]);
+  const [travelers, setTravelers] = useState(1);
+  const [status, setStatus] = useState<"idle" | "creating" | "laying">("idle");
   const [error, setError] = useState<string | null>(null);
 
-  function selectPreset(preset: (typeof POPULAR_DESTINATIONS)[0]) {
-    setDestCity(preset.name);
-    setDestCountry(preset.country);
-    setLat(preset.lat);
-    setLng(preset.lng);
-    setTitle(`${preset.name} Adventure`);
-    setCoverEmoji(preset.emoji);
-    setCoverTheme(preset.theme);
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setResults([]);
+      return;
+    }
+    let live = true;
+    const t = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const r = await searchCities(q);
+        if (live) {
+          setResults(r);
+          setSearchError(null);
+        }
+      } catch (e) {
+        if (live) setSearchError(e instanceof ApiError ? e.message : "City search isn't available.");
+      } finally {
+        if (live) setSearching(false);
+      }
+    }, 300);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [query]);
+
+  function addPlace(p: Place) {
+    setPlaces((ps) => (ps.some((x) => x.name === p.name && x.country === p.country) ? ps : [...ps, p].slice(0, 4)));
+    setQuery("");
+    setResults([]);
   }
 
-  function toggleInterest(item: string) {
-    setInterests((prev) =>
-      prev.includes(item) ? prev.filter((i) => i !== item) : [...prev, item]
-    );
-  }
+  const suggestedTitle = places.length
+    ? `${places.map((p) => p.name).join(" & ")}${start ? ` in ${new Date(start + "T00:00:00").toLocaleDateString("en-US", { month: "long" })}` : ""}`
+    : "";
 
-  async function handleCreate() {
-    if (!destCity.trim()) {
-      setError("Please specify a destination city.");
-      return;
-    }
-    if (!startDate || !endDate) {
-      setError("Start date and end date are required.");
-      return;
-    }
-    if (new Date(endDate) < new Date(startDate)) {
-      setError("End date must be on or after start date.");
-      return;
-    }
-
-    setBusy(true);
+  async function create() {
+    if (!places.length) return setError("Choose where you're going.");
+    if (!start || !end) return setError("Pick the first and last day of the trip.");
+    const budgetNum = budget.trim() ? Number(budget.replace(/,/g, "")) : 0;
+    if (!Number.isFinite(budgetNum) || budgetNum < 0) return setError("Budget should be a number, or leave it empty.");
     setError(null);
+    setStatus("creating");
     try {
       const res = await createTrip({
-        title: title.trim() || `${destCity} Journey`,
-        subtitle: `${destCity} · ${destCountry}`,
-        destinations: [{ name: destCity.trim(), country: destCountry.trim(), lat, lng }],
-        startDate,
-        endDate,
-        budgetAmount: Number(budgetAmount) || 0,
-        homeCurrency,
+        title: title.trim() || suggestedTitle,
+        destinations: places.map((p) => ({ name: p.name, country: p.country, lat: p.lat, lng: p.lng })),
+        startDate: start,
+        endDate: end,
+        budgetAmount: budgetNum,
+        homeCurrency: home,
         pace,
         interests,
-        travelersCount,
-        coverEmoji,
-        coverTheme,
+        travelersCount: travelers,
+        ...coverFor(places[0]),
       });
+      // Lay out a day for every date so the plan is ready to fill.
+      setStatus("laying");
+      try {
+        await layOutDays(res.trip.id, start, end, [], places.map((p) => p.name));
+      } catch {
+        // The Plan tab offers to finish this if it didn't complete.
+      }
       router.replace(`/trips/${res.trip.id}`);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not create trip. Please try again.");
-    } finally {
-      setBusy(false);
+      setError(e instanceof ApiError ? e.message : "Couldn't create the trip. Try again.");
+      setStatus("idle");
     }
   }
 
+  const nights = start && end ? Math.round((new Date(end + "T00:00:00").getTime() - new Date(start + "T00:00:00").getTime()) / 86400000) : null;
+
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={[styles.container, { paddingTop: insets.top }]}
-    >
-      <Stack.Screen options={{ headerShown: false }} />
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.paper }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <SheetBar title="New trip" />
+      <ScrollView contentContainerStyle={{ paddingHorizontal: GUTTER, paddingBottom: space.xxxl }} keyboardShouldPersistTaps="handled">
+        <T v="title" style={{ marginTop: space.xl }}>
+          Where are you going?
+        </T>
 
-      <Header
-        eyebrow="NEW JOURNEY"
-        title="Plan a Chapter"
-        onBack={() => router.back()}
-      />
+        {places.length ? (
+          <View style={{ marginTop: space.lg }}>
+            {places.map((p, i) => (
+              <View key={`${p.name}-${i}`} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.rule }}>
+                <View style={{ flex: 1 }}>
+                  <T v="entry">{p.name}</T>
+                  <T v="small" c="ink3">
+                    {[p.admin, p.country].filter(Boolean).join(", ")}
+                  </T>
+                </View>
+                <Pressable onPress={() => setPlaces((ps) => ps.filter((_, j) => j !== i))} accessibilityRole="button" accessibilityLabel={`Remove ${p.name}`} hitSlop={10}>
+                  <Ionicons name="close" size={20} color={colors.ink3} />
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        ) : null}
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Destination Presets */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>POPULAR DESTINATIONS</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.presetsRow}
-          >
-            {POPULAR_DESTINATIONS.map((preset) => {
-              const isSelected = destCity === preset.name;
-              return (
-                <TouchableOpacity
-                  key={preset.name}
-                  onPress={() => selectPreset(preset)}
-                  activeOpacity={0.8}
-                  style={[
-                    styles.presetCard,
-                    isSelected && styles.presetCardSelected,
-                  ]}
-                >
-                  <Text style={styles.presetEmoji}>{preset.emoji}</Text>
-                  <Text
-                    style={[
-                      styles.presetName,
-                      isSelected && styles.presetNameSelected,
-                    ]}
+        <View style={{ marginTop: space.lg }}>
+          <Field
+            value={query}
+            onChangeText={setQuery}
+            placeholder={places.length ? "Add another city" : "Search for a city"}
+            autoFocus
+            autoCorrect={false}
+            returnKeyType="search"
+            accessibilityLabel="Search for a city"
+          />
+          {searching ? <ActivityIndicator size="small" color={colors.ink3} style={{ position: "absolute", right: 14, top: 14 }} /> : null}
+          {searchError ? (
+            <T v="small" c="danger" style={{ marginTop: 6 }}>
+              {searchError}
+            </T>
+          ) : null}
+          {!places.length && !query.trim() ? (
+            <View style={{ marginTop: space.md, gap: 8 }}>
+              <T v="label" c="ink3">
+                Popular
+              </T>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                {POPULAR.map((p) => (
+                  <Pressable
+                    key={p.name}
+                    onPress={() => addPlace(p)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${p.name}, ${p.country}`}
+                    style={({ pressed }) => ({ paddingHorizontal: 12, height: 36, justifyContent: "center", borderRadius: radii.sm, borderWidth: 1, borderColor: colors.rule, backgroundColor: pressed ? colors.sunk : colors.raised })}
                   >
-                    {preset.name}
-                  </Text>
-                  <Text style={styles.presetCountry}>{preset.country}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+                    <T v="meta" c="ink2">
+                      {p.name}
+                    </T>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ) : null}
+          {results.length ? (
+            <View style={{ marginTop: 6, borderWidth: 1, borderColor: colors.rule, borderRadius: radii.md, backgroundColor: colors.raised }}>
+              {results.map((r, i) => (
+                <Pressable
+                  key={`${r.name}-${r.lat}`}
+                  onPress={() => addPlace(r)}
+                  accessibilityRole="button"
+                  style={({ pressed }) => ({ paddingHorizontal: 14, paddingVertical: 11, borderTopWidth: i ? 1 : 0, borderTopColor: colors.rule, backgroundColor: pressed ? colors.sunk : "transparent" })}
+                >
+                  <T v="bodyStrong">{r.name}</T>
+                  <T v="small" c="ink3">
+                    {[r.admin, r.country].filter(Boolean).join(", ")}
+                  </T>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
         </View>
 
-        {/* Journey Details Form Card */}
-        <Card padding={20} style={styles.formCard}>
-          {/* Destination inputs */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>DESTINATION CITY & COUNTRY</Text>
-            <View style={styles.rowTwoCols}>
-              <TextInput
-                value={destCity}
-                onChangeText={setDestCity}
-                placeholder="City (e.g. Kyoto)"
-                placeholderTextColor={TRAVEL_THEME.colors.inkDim}
-                style={[styles.input, { flex: 1 }]}
-              />
-              <TextInput
-                value={destCountry}
-                onChangeText={setDestCountry}
-                placeholder="Country (e.g. Japan)"
-                placeholderTextColor={TRAVEL_THEME.colors.inkDim}
-                style={[styles.input, { flex: 1 }]}
-              />
-            </View>
+        <T v="title" style={{ marginTop: space.xxl }}>
+          When?
+        </T>
+        <T v="meta" c={start && end ? "ink" : "ink3"} num style={{ marginTop: 4, marginBottom: space.md }}>
+          {start && end
+            ? `${fmtDate(start + "T00:00:00", { weekday: "short", month: "short", day: "numeric" })} – ${fmtDate(end + "T00:00:00", { weekday: "short", month: "short", day: "numeric" })} · ${nights! + 1} days`
+            : start
+              ? "Now tap the last day"
+              : "Tap the first day, then the last"}
+        </T>
+        <RangeCalendar
+          start={start}
+          end={end}
+          onChange={(s, e) => {
+            setStart(s);
+            setEnd(e);
+          }}
+        />
+
+        <Rule style={{ marginTop: space.xl }} />
+
+        <View style={{ gap: space.xl, marginTop: space.xl }}>
+          <Field label="Name" value={title} onChangeText={setTitle} placeholder={suggestedTitle || "Name the trip"} />
+
+          <View style={{ gap: 8 }}>
+            <Field label="Budget" value={budget} onChangeText={setBudget} placeholder="Optional" keyboardType="decimal-pad" numeric />
+            <Choices options={HOME_CURRENCIES} value={home} onChange={setHome} />
+            <T v="small" c="ink3">
+              Your home currency. Everything you spend is totalled in it.
+            </T>
           </View>
 
-          {/* Journey Title */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>JOURNEY TITLE</Text>
-            <TextInput
-              value={title}
-              onChangeText={setTitle}
-              placeholder="e.g. Tokyo Autumn Expedition"
-              placeholderTextColor={TRAVEL_THEME.colors.inkDim}
-              style={styles.input}
-            />
+          <View style={{ gap: 8 }}>
+            <T v="label" c="ink3">
+              Pace
+            </T>
+            <Choices options={PACES} value={pace} onChange={setPace} />
           </View>
 
-          {/* Dates */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>TRAVEL DATES (YYYY-MM-DD)</Text>
-            <View style={styles.rowTwoCols}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.inputSubLabel}>DEPARTURE</Text>
-                <TextInput
-                  value={startDate}
-                  onChangeText={setStartDate}
-                  placeholder="2026-10-14"
-                  placeholderTextColor={TRAVEL_THEME.colors.inkDim}
-                  style={[styles.input, TABULAR_NUMS]}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.inputSubLabel}>RETURN</Text>
-                <TextInput
-                  value={endDate}
-                  onChangeText={setEndDate}
-                  placeholder="2026-10-22"
-                  placeholderTextColor={TRAVEL_THEME.colors.inkDim}
-                  style={[styles.input, TABULAR_NUMS]}
-                />
-              </View>
-            </View>
-          </View>
-
-          {/* Budget & Currency */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>BUDGET & CURRENCY</Text>
-            <View style={styles.rowTwoCols}>
-              <TextInput
-                value={budgetAmount}
-                onChangeText={setBudgetAmount}
-                placeholder="Amount"
-                keyboardType="numeric"
-                placeholderTextColor={TRAVEL_THEME.colors.inkDim}
-                style={[styles.input, { flex: 1.5 }, TABULAR_NUMS]}
-              />
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
-                <View style={styles.currencyRow}>
-                  {SUPPORTED_CURRENCIES.slice(0, 5).map((cur) => (
-                    <TouchableOpacity
-                      key={cur}
-                      onPress={() => setHomeCurrency(cur)}
-                      style={[
-                        styles.curChip,
-                        homeCurrency === cur && styles.curChipSelected,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.curText,
-                          homeCurrency === cur && styles.curTextSelected,
-                        ]}
-                      >
-                        {cur}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
-            </View>
-          </View>
-
-          {/* Travel Pace */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>TRAVEL PACE</Text>
-            <SegmentedControl
-              options={[
-                { key: "relaxed", label: "Relaxed" },
-                { key: "balanced", label: "Balanced" },
-                { key: "packed", label: "Packed" },
-              ]}
-              value={pace}
-              onChange={setPace}
-              accentColor={TRAVEL_THEME.colors.terracotta}
-            />
-          </View>
-
-          {/* Travelers Count */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>TRAVELERS</Text>
-            <View style={styles.travelerCounter}>
-              <TouchableOpacity
-                onPress={() => setTravelersCount((c) => Math.max(1, c - 1))}
-                style={styles.counterBtn}
-              >
-                <Ionicons name="remove" size={16} color={TRAVEL_THEME.colors.inkPrimary} />
-              </TouchableOpacity>
-              <Text style={[styles.counterVal, TABULAR_NUMS]}>
-                {travelersCount} traveler{travelersCount > 1 ? "s" : ""}
-              </Text>
-              <TouchableOpacity
-                onPress={() => setTravelersCount((c) => c + 1)}
-                style={styles.counterBtn}
-              >
-                <Ionicons name="add" size={16} color={TRAVEL_THEME.colors.inkPrimary} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Interests Chips */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>INTERESTS & FOCUS</Text>
-            <View style={styles.interestChipsWrap}>
-              {INTEREST_OPTIONS.map((item) => {
-                const active = interests.includes(item);
+          <View style={{ gap: 8 }}>
+            <T v="label" c="ink3">
+              Interested in
+            </T>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+              {INTERESTS.map((i) => {
+                const on = interests.includes(i);
                 return (
-                  <TouchableOpacity
-                    key={item}
-                    onPress={() => toggleInterest(item)}
-                    activeOpacity={0.8}
-                    style={[
-                      styles.interestChip,
-                      active && styles.interestChipActive,
-                    ]}
+                  <Pressable
+                    key={i}
+                    onPress={() => setInterests((xs) => (on ? xs.filter((x) => x !== i) : [...xs, i]))}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: on }}
+                    style={{ paddingHorizontal: 12, height: 36, justifyContent: "center", borderRadius: radii.sm, borderWidth: 1, borderColor: on ? colors.ink : colors.rule, backgroundColor: on ? colors.ink : colors.raised }}
                   >
-                    <Text
-                      style={[
-                        styles.interestText,
-                        active && styles.interestTextActive,
-                      ]}
-                    >
-                      {item}
-                    </Text>
-                  </TouchableOpacity>
+                    <T v="meta" style={{ color: on ? colors.onInk : colors.ink2 }}>
+                      {i}
+                    </T>
+                  </Pressable>
                 );
               })}
             </View>
           </View>
 
-          {error ? (
-            <View style={styles.errorBox}>
-              <Ionicons name="alert-circle" size={14} color={TRAVEL_THEME.colors.danger} />
-              <Text style={styles.errorText}>{error}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <View>
+              <T v="label" c="ink3">
+                Travellers
+              </T>
+              <T v="heading" num style={{ marginTop: 2 }}>
+                {travelers}
+              </T>
             </View>
-          ) : null}
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <Stepper icon="remove" label="Fewer travellers" disabled={travelers <= 1} onPress={() => setTravelers((n) => Math.max(1, n - 1))} />
+              <Stepper icon="add" label="More travellers" disabled={travelers >= 20} onPress={() => setTravelers((n) => Math.min(20, n + 1))} />
+            </View>
+          </View>
 
-          <Button
-            label="Create Journey"
-            variant="primary"
-            size="lg"
-            loading={busy}
-            onPress={handleCreate}
-            iconLeft={<Ionicons name="airplane-outline" size={18} color="#FFFFFF" />}
-            style={{ marginTop: 8 }}
-          />
-        </Card>
+          {error ? (
+            <T v="meta" c="danger" accessibilityLiveRegion="polite">
+              {error}
+            </T>
+          ) : null}
+          <Button size="lg" label={status === "laying" ? "Laying out your days…" : "Create trip"} loading={status === "creating"} disabled={status !== "idle"} onPress={create} />
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: TRAVEL_THEME.colors.bg,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 40,
-    gap: 16,
-  },
-  section: {
-    gap: 8,
-  },
-  sectionLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1.2,
-    color: TRAVEL_THEME.colors.inkMuted,
-    paddingHorizontal: 2,
-  },
-  presetsRow: {
-    gap: 10,
-    paddingVertical: 2,
-  },
-  presetCard: {
-    width: 100,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    borderRadius: 16,
-    backgroundColor: TRAVEL_THEME.colors.surface,
-    borderWidth: 1,
-    borderColor: TRAVEL_THEME.colors.border,
-    alignItems: "center",
-    ...TRAVEL_THEME.shadows.card,
-  },
-  presetCardSelected: {
-    borderColor: TRAVEL_THEME.colors.terracotta,
-    backgroundColor: TRAVEL_THEME.colors.terracottaLight,
-  },
-  presetEmoji: {
-    fontSize: 24,
-    marginBottom: 4,
-  },
-  presetName: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: TRAVEL_THEME.colors.inkPrimary,
-  },
-  presetNameSelected: {
-    color: TRAVEL_THEME.colors.terracottaDark,
-  },
-  presetCountry: {
-    fontSize: 10.5,
-    color: TRAVEL_THEME.colors.inkMuted,
-    marginTop: 1,
-  },
-  formCard: {
-    gap: 16,
-  },
-  fieldGroup: {
-    gap: 6,
-  },
-  fieldLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 0.8,
-    color: TRAVEL_THEME.colors.inkMuted,
-  },
-  inputSubLabel: {
-    fontSize: 9.5,
-    fontWeight: "600",
-    color: TRAVEL_THEME.colors.inkMuted,
-    marginBottom: 3,
-  },
-  input: {
-    backgroundColor: TRAVEL_THEME.colors.surfaceWarm,
-    borderWidth: 1,
-    borderColor: TRAVEL_THEME.colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    fontSize: 14,
-    color: TRAVEL_THEME.colors.inkPrimary,
-  },
-  rowTwoCols: {
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "center",
-  },
-  currencyRow: {
-    flexDirection: "row",
-    gap: 4,
-    paddingLeft: 4,
-  },
-  curChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: TRAVEL_THEME.colors.surfaceWarm,
-    borderWidth: 1,
-    borderColor: TRAVEL_THEME.colors.border,
-  },
-  curChipSelected: {
-    backgroundColor: TRAVEL_THEME.colors.terracotta,
-    borderColor: TRAVEL_THEME.colors.terracotta,
-  },
-  curText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: TRAVEL_THEME.colors.inkSecondary,
-  },
-  curTextSelected: {
-    color: "#FFFFFF",
-  },
-  travelerCounter: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: TRAVEL_THEME.colors.surfaceWarm,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: TRAVEL_THEME.colors.border,
-  },
-  counterBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: TRAVEL_THEME.colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: TRAVEL_THEME.colors.border,
-  },
-  counterVal: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: TRAVEL_THEME.colors.inkPrimary,
-  },
-  interestChipsWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 7,
-  },
-  interestChip: {
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 10,
-    backgroundColor: TRAVEL_THEME.colors.surfaceWarm,
-    borderWidth: 1,
-    borderColor: TRAVEL_THEME.colors.border,
-  },
-  interestChipActive: {
-    backgroundColor: TRAVEL_THEME.colors.terracottaLight,
-    borderColor: "#F0D7D0",
-  },
-  interestText: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: TRAVEL_THEME.colors.inkSecondary,
-  },
-  interestTextActive: {
-    fontWeight: "600",
-    color: TRAVEL_THEME.colors.terracottaDark,
-  },
-  errorBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: TRAVEL_THEME.colors.dangerLight,
-    borderWidth: 1,
-    borderColor: "#F4D2CE",
-  },
-  errorText: {
-    fontSize: 12,
-    color: TRAVEL_THEME.colors.danger,
-    flex: 1,
-  },
-});
+function Stepper({ icon, label, disabled, onPress }: { icon: "add" | "remove"; label: string; disabled: boolean; onPress: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => ({ width: 44, height: 44, borderRadius: radii.md, borderWidth: 1, borderColor: colors.rule, alignItems: "center", justifyContent: "center", backgroundColor: pressed ? colors.sunk : colors.raised, opacity: disabled ? 0.35 : 1 })}
+    >
+      <Ionicons name={icon} size={20} color={colors.ink} />
+    </Pressable>
+  );
+}
+
+function coverFor(p: Place): { coverEmoji?: string; coverTheme?: string } {
+  const hit = POPULAR.find((x) => x.country === p.country) ?? null;
+  return hit ? { coverEmoji: hit.emoji, coverTheme: hit.theme } : {};
+}
