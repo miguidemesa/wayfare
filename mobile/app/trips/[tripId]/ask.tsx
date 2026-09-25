@@ -43,6 +43,14 @@ export default function Ask() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const scroller = useRef<ScrollView>(null);
+  const inputRef = useRef<TextInput>(null);
+
+  // Examples go into the box, not straight to Wayfare: some of them change
+  // the plan, so the traveller gets to read and edit first.
+  function fillExample(text: string) {
+    setInput(text);
+    inputRef.current?.focus();
+  }
 
   const viewedIdx = date && bundle ? bundle.days.findIndex((d) => dayKey(d.date) === date) : -1;
 
@@ -112,8 +120,9 @@ export default function Ask() {
               {EXAMPLES.map((ex) => (
                 <View key={ex}>
                   <Pressable
-                    onPress={() => void send(ex)}
+                    onPress={() => fillExample(ex)}
                     accessibilityRole="button"
+                    accessibilityHint="Puts this request in the message box"
                     style={({ pressed }) => ({ paddingVertical: 12, opacity: pressed ? 0.5 : 1 })}
                   >
                     <T v="aside" c="ink">
@@ -163,9 +172,10 @@ export default function Ask() {
           {EXAMPLES.map((ex) => (
             <Pressable
               key={ex}
-              onPress={() => void send(ex)}
+              onPress={() => fillExample(ex)}
               disabled={sending}
               accessibilityRole="button"
+              accessibilityHint="Puts this request in the message box"
               style={({ pressed }) => ({ paddingHorizontal: 12, height: 34, justifyContent: "center", borderRadius: radii.sm, borderWidth: 1, borderColor: colors.rule, backgroundColor: pressed ? colors.sunk : colors.raised, opacity: sending ? 0.5 : 1 })}
             >
               <T v="small" c="ink2">
@@ -177,6 +187,7 @@ export default function Ask() {
       ) : null}
       <View style={{ borderTopWidth: 1, borderTopColor: colors.rule, paddingHorizontal: GUTTER, paddingTop: 10, paddingBottom: Math.max(insets.bottom, 10), flexDirection: "row", alignItems: "flex-end", gap: 10 }}>
         <TextInput
+          ref={inputRef}
           value={input}
           onChangeText={setInput}
           placeholder="Ask to change the plan…"

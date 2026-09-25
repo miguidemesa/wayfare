@@ -11,6 +11,8 @@ type Props = {
   variant?: Variant;
   size?: "md" | "lg";
   loading?: boolean;
+  /** Working, with the label kept (e.g. "Saving…"): not pressable, announced as busy. */
+  busy?: boolean;
   disabled?: boolean;
   icon?: ReactNode;
   style?: StyleProp<ViewStyle>;
@@ -23,9 +25,9 @@ type Props = {
  * secondary — hairline outline.
  * quiet — text only, for inline actions next to content.
  */
-export function Button({ label, onPress, variant = "primary", size = "md", loading, disabled, icon, style, accessibilityHint }: Props) {
+export function Button({ label, onPress, variant = "primary", size = "md", loading, busy, disabled, icon, style, accessibilityHint }: Props) {
   const { colors } = useTheme();
-  const inactive = disabled || loading;
+  const inactive = disabled || loading || busy;
 
   const bg = variant === "primary" ? colors.ink : variant === "accent" ? colors.accent : "transparent";
   const fg = variant === "primary" ? colors.onInk : variant === "accent" ? colors.onAccent : variant === "quiet" ? colors.accent : colors.ink;
@@ -38,7 +40,7 @@ export function Button({ label, onPress, variant = "primary", size = "md", loadi
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={accessibilityHint}
-      accessibilityState={{ disabled: !!inactive, busy: !!loading }}
+      accessibilityState={{ disabled: !!inactive, busy: !!(loading || busy) }}
       hitSlop={variant === "quiet" ? 10 : 0}
       style={({ pressed }) => [
         {
@@ -47,12 +49,12 @@ export function Button({ label, onPress, variant = "primary", size = "md", loadi
           borderRadius: radii.md,
           backgroundColor: bg,
           borderWidth: variant === "secondary" ? 1 : 0,
-          borderColor: colors.ruleStrong,
+          borderColor: colors.edge,
           alignItems: "center",
           justifyContent: "center",
           flexDirection: "row",
           gap: 8,
-          opacity: inactive ? 0.45 : pressed ? 0.78 : 1,
+          opacity: busy ? 0.6 : inactive ? 0.45 : pressed ? 0.78 : 1,
         },
         style,
       ]}

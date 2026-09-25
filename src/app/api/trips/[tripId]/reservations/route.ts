@@ -1,4 +1,4 @@
-﻿import { db } from "@/lib/db";
+import { db } from "@/lib/db";
 import { requireUser, HttpError } from "@/lib/auth";
 import { handle, json, readJson } from "@/lib/api-helpers";
 
@@ -22,8 +22,8 @@ type Body = {
   locationName?: string;
   cost?: number;
   currency?: string;
-  cancellationDeadline?: string;
-  notes?: string;
+  cancellationDeadline?: string | null;
+  notes?: string | null;
 };
 
 async function assertOwned(tripId: string, userId: string) {
@@ -76,12 +76,24 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ tripId
     const patch: Record<string, unknown> = {};
     if (body.title != null) patch.title = body.title.trim();
     if (body.type != null) patch.type = body.type;
-    if (body.dateTime) patch.dateTime = new Date(body.dateTime);
+    if (body.dateTime) {
+      const dt = new Date(body.dateTime);
+      if (isNaN(dt.getTime())) return json({ error: "Invalid dateTime" }, 400);
+      patch.dateTime = dt;
+    }
     if (body.confirmationNumber !== undefined)
       patch.confirmationNumber = body.confirmationNumber || null;
     if (body.locationName !== undefined) patch.locationName = body.locationName || null;
     if (body.cost !== undefined) patch.cost = body.cost == null ? null : Number(body.cost);
-    if (body.notes !== undefined) patch.notes = body.notes;
+    if (body.notes !== undefined) patch.notes = body.notes || null;
+    if (body.cancellationDeadline !== undefined) {
+      if (!body.cancellationDeadline) patch.cancellationDeadline = null;
+      else {
+        const deadline = new Date(body.cancellationDeadline);
+        if (isNaN(deadline.getTime())) return json({ error: "Invalid cancellationDeadline" }, 400);
+        patch.cancellationDeadline = deadline;
+      }
+    }
 
     const reservation = await db.reservation.update({ where: { id: body.id }, data: patch });
     return json({ reservation });

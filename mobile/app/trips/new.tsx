@@ -126,7 +126,7 @@ export default function NewTrip() {
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.paper }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <SheetBar title="New trip" />
       <ScrollView contentContainerStyle={{ paddingHorizontal: GUTTER, paddingBottom: space.xxxl }} keyboardShouldPersistTaps="handled">
-        <T v="title" style={{ marginTop: space.xl }}>
+        <T v="title" style={{ marginTop: space.xl }} accessibilityRole="header">
           Where are you going?
         </T>
 
@@ -205,7 +205,7 @@ export default function NewTrip() {
           ) : null}
         </View>
 
-        <T v="title" style={{ marginTop: space.xxl }}>
+        <T v="title" style={{ marginTop: space.xxl }} accessibilityRole="header">
           When?
         </T>
         <T v="meta" c={start && end ? "ink" : "ink3"} num style={{ marginTop: 4, marginBottom: space.md }}>

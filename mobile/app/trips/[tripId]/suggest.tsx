@@ -123,7 +123,7 @@ function SuggestFlow() {
       ) : phase === "setup" ? (
         <ScrollView contentContainerStyle={{ paddingHorizontal: GUTTER, paddingBottom: space.xxxl, gap: space.xl }}>
           <View style={{ paddingTop: space.xl, gap: space.sm }}>
-            <T v="title">{single ? `A plan for ${fmtDay(single.date, { weekday: "long" })}` : `A plan for ${cities || "your trip"}`}</T>
+            <T v="title" accessibilityRole="header">{single ? `A plan for ${fmtDay(single.date, { weekday: "long" })}` : `A plan for ${cities || "your trip"}`}</T>
             <T v="body" c="ink2">
               Wayfare picks places from its guide, keeps each day to one part of town so you’re not crossing the city, and fits meals in at sensible times. You’ll see it before anything changes.
             </T>
@@ -170,7 +170,7 @@ function SuggestFlow() {
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: space.xxxl }}>
           <View style={{ paddingHorizontal: GUTTER, paddingTop: space.xl, paddingBottom: space.lg, gap: 6 }}>
-            <T v="title">Here’s a draft</T>
+            <T v="title" accessibilityRole="header">Here’s a draft</T>
             <T v="meta" c="ink2" num>
               {draftStops} stops
               {totals.travel ? ` · about ${fmtDuration(totals.travel)} getting around` : ""}

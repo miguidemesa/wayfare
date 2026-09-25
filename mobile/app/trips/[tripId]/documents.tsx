@@ -69,6 +69,7 @@ export default function Documents() {
   return (
     <SubScreen
       title="Documents"
+      scrollTopWhen={adding}
       intro="Passport numbers, policy details, ticket codes. Sensitive ones stay hidden until you tap."
       right={!adding ? <Button variant="quiet" label="Add" onPress={() => setAdding(true)} /> : undefined}
       refreshing={refreshing}
@@ -114,7 +115,7 @@ export default function Documents() {
                   <T v="entry" style={{ flex: 1 }}>
                     {d.name}
                   </T>
-                  <Pressable onPress={() => remove(d)} hitSlop={10} accessibilityRole="button" accessibilityLabel={`Delete ${d.name}`}>
+                  <Pressable onPress={() => remove(d)} hitSlop={14} accessibilityRole="button" accessibilityLabel={`Delete ${d.name}`}>
                     <T v="small" c="ink3">
                       Delete
                     </T>

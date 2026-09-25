@@ -49,7 +49,7 @@ export default function Journal() {
   }
 
   return (
-    <SubScreen title="Journal" intro="A line or two a day is enough to remember it by." right={!writing ? <Button variant="quiet" label="Write" onPress={() => setWriting(true)} /> : undefined}>
+    <SubScreen title="Journal" scrollTopWhen={writing} intro="A line or two a day is enough to remember it by." right={!writing ? <Button variant="quiet" label="Write" onPress={() => setWriting(true)} /> : undefined}>
       {writing ? <Compose onDone={() => setWriting(false)} /> : null}
 
       {entries.length === 0 && !writing ? (
@@ -71,7 +71,7 @@ export default function Journal() {
                 {fmtDate(e.date, { weekday: "short", month: "short", day: "numeric" })}
                 {n ? ` · Day ${n}` : ""}
               </T>
-              <Pressable onPress={() => remove(e.id, e.title)} hitSlop={10} accessibilityRole="button" accessibilityLabel={`Delete ${e.title}`}>
+              <Pressable onPress={() => remove(e.id, e.title)} hitSlop={14} accessibilityRole="button" accessibilityLabel={`Delete ${e.title}`}>
                 <T v="small" c="ink3">
                   Delete
                 </T>

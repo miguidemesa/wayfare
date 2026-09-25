@@ -146,7 +146,8 @@ export default function Packing() {
             title={section === "PACKING" ? "Nothing on the list" : "No to-dos"}
             body="Add your own, or let Wayfare suggest a list from the destination, the season and how long you're away."
             action={generating ? "Suggesting…" : "Suggest a list"}
-            onAction={generating ? undefined : generate}
+            onAction={generate}
+            actionBusy={generating}
           />
         </View>
       ) : (
@@ -176,7 +177,7 @@ export default function Packing() {
           ))}
           {visible.length ? (
             <View style={{ paddingHorizontal: GUTTER }}>
-              <Button variant="quiet" label={generating ? "Suggesting…" : "Suggest more items"} onPress={generating ? undefined : generate} />
+              <Button variant="quiet" label={generating ? "Suggesting…" : "Suggest more items"} busy={generating} onPress={generate} />
             </View>
           ) : null}
         </View>

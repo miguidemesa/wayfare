@@ -61,7 +61,7 @@ export default function Bookings() {
   }
 
   return (
-    <SubScreen title="Bookings" intro="Where you're staying, how you're getting there, and anything reserved." right={!adding ? <Button variant="quiet" label="Add" onPress={() => setAdding(true)} /> : undefined}>
+    <SubScreen title="Bookings" scrollTopWhen={adding} intro="Where you're staying, how you're getting there, and anything reserved." right={!adding ? <Button variant="quiet" label="Add" onPress={() => setAdding(true)} /> : undefined}>
       {adding ? <AddBooking onDone={() => setAdding(false)} /> : null}
 
       {none && !adding ? (
@@ -163,7 +163,7 @@ function Item({ title, lines, onRemove }: { title: string; lines: (string | null
         <T v="entry" style={{ flex: 1 }} selectable>
           {title}
         </T>
-        <Pressable onPress={onRemove} accessibilityRole="button" accessibilityLabel={`Remove ${title}`} hitSlop={10}>
+        <Pressable onPress={onRemove} accessibilityRole="button" accessibilityLabel={`Remove ${title}`} hitSlop={14}>
           <T v="small" c="ink3">
             Remove
           </T>

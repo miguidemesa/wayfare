@@ -88,7 +88,7 @@ export function RangeCalendar({
                     justifyContent: "center",
                     backgroundColor: isEdge ? colors.ink : "transparent",
                     borderWidth: k === today && !isEdge ? 1 : 0,
-                    borderColor: colors.ruleStrong,
+                    borderColor: colors.edge,
                   }}
                 >
                   <T v="meta" num style={{ color: isEdge ? colors.onInk : past ? colors.ink3 : colors.ink }}>

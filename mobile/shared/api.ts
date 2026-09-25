@@ -41,29 +41,61 @@ export function setUnauthorizedHandler(fn: (() => void) | null) {
 // lost session.
 const AUTH_PATHS = /^\/api\/auth\//;
 
-async function request<T>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {
+/** Long enough for a slow mobile network; short enough not to strand anyone on a spinner. */
+const DEFAULT_TIMEOUT_MS = 20000;
+
+/** fetch() that gives up after `ms`. A timeout rejects like any network failure. */
+export async function fetchWithTimeout(url: string, init: RequestInit = {}, ms = DEFAULT_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** What to say when the server didn't send a message of its own. */
+function fallbackMessage(status: number): string {
+  if (status >= 500) return "Wayfare is having trouble right now. Try again in a moment.";
+  if (status === 404) return "That isn't there any more.";
+  if (status === 403) return "You don't have access to that.";
+  if (status === 429) return "That's a lot of requests at once. Wait a minute and try again.";
+  return "That didn't work. Try again.";
+}
+
+type RequestOptions = RequestInit & { json?: unknown; timeoutMs?: number };
+
+async function request<T>(path: string, init?: RequestOptions): Promise<T> {
   const method = init?.method ?? (init?.json ? "POST" : "GET");
+  const { json, timeoutMs, ...rest } = init ?? {};
   let res: Response;
   try {
-    res = await fetch(`${API_URL}${path}`, {
-      ...init,
-      method,
-      headers: {
-        ...(init?.json !== undefined ? { "Content-Type": "application/json" } : {}),
-        ...init?.headers,
+    res = await fetchWithTimeout(
+      `${API_URL}${path}`,
+      {
+        ...rest,
+        method,
+        headers: {
+          ...(json !== undefined ? { "Content-Type": "application/json" } : {}),
+          ...rest.headers,
+        },
+        body: json !== undefined ? JSON.stringify(json) : rest.body,
+        credentials: "include",
       },
-      body: init?.json !== undefined ? JSON.stringify(init.json) : init?.body,
-      credentials: "include",
-    });
+      timeoutMs
+    );
   } catch {
-    throw new ApiError(0, "Can't reach Wayfare — check your connection.");
+    // Offline, unreachable, or too slow: status 0 either way, so callers treat
+    // it as "no answer" rather than as a verdict (see lib/auth.tsx).
+    throw new ApiError(0, "Can't reach Wayfare. Check your connection and try again.");
   }
   if (!res.ok) {
     if (res.status === 401 && !AUTH_PATHS.test(path)) onUnauthorized?.();
-    let message = `Error ${res.status}`;
+    let message = fallbackMessage(res.status);
     try {
       const data = await res.json();
-      if (typeof data?.error === "string") message = data.error;
+      if (typeof data?.error === "string" && data.error) message = data.error;
     } catch {}
     throw new ApiError(res.status, message);
   }
@@ -227,9 +259,9 @@ export function generateItineraryPlan(
   plan?: unknown[],
   pace?: "relaxed" | "balanced" | "packed"
 ) {
-  return api.post<{ plan?: unknown[]; appliedDays?: number; totalTravelMin?: number; estCost?: number }>(
+  return request<{ plan?: unknown[]; appliedDays?: number; totalTravelMin?: number; estCost?: number }>(
     `/api/trips/${tripId}/generate`,
-    { apply, plan, pace }
+    { method: "POST", json: { apply, plan, pace }, timeoutMs: 45000 }
   );
 }
 
@@ -473,10 +505,12 @@ export function fetchConversation(tripId: string) {
 
 /** Ask the trip concierge. It can edit the itinerary itself (toolsUsed says what it did). */
 export function askConcierge(tripId: string, message: string, conversationId: string | null) {
-  return api.post<{ conversationId: string; content: string; toolsUsed: string[] }>(
-    `/api/trips/${tripId}/ai`,
-    { message, conversationId }
-  );
+  // The concierge may call several tools (and a model) before it answers.
+  return request<{ conversationId: string; content: string; toolsUsed: string[] }>(`/api/trips/${tripId}/ai`, {
+    method: "POST",
+    json: { message, conversationId },
+    timeoutMs: 60000,
+  });
 }
 
 // ------------------------------------------------------------ geocoding
@@ -489,7 +523,7 @@ export async function searchCities(query: string): Promise<Place[]> {
   if (q.length < 2) return [];
   let res: Response;
   try {
-    res = await fetch(
+    res = await fetchWithTimeout(
       `https://geocoding-api.open-meteo.com/v1/search?count=6&language=en&format=json&name=${encodeURIComponent(q)}`
     );
   } catch {

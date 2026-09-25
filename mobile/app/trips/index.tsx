@@ -108,7 +108,7 @@ export default function Home() {
 
       {!featuredSummary ? (
         <View style={{ paddingHorizontal: GUTTER, paddingTop: space.xxl }}>
-          <T v="display">Where to next?</T>
+          <T v="display" accessibilityRole="header">Where to next?</T>
           <T v="body" c="ink2" style={{ marginTop: space.md, maxWidth: 340 }}>
             {trips.length ? "No trips coming up. Start one and Wayfare will lay out the days for you." : "Wayfare keeps your plan, your map and your spending in one place. Start with where you're going."}
           </T>
@@ -176,7 +176,7 @@ function Featured({ summary, bundle }: { summary: TripSummary; bundle: TripBundl
         {phase === "during" ? "You're travelling" : daysUntil(summary.startDate) <= 1 ? "Leaving tomorrow" : `In ${daysUntil(summary.startDate)} days`}
       </T>
       <Pressable onPress={open} accessibilityRole="button" accessibilityLabel={`Open ${summary.title}`}>
-        <T v="display" style={{ marginTop: space.sm }}>
+        <T v="display" style={{ marginTop: space.sm }} accessibilityRole="header">
           {phase === "during" ? `Now in ${summary.destinations[0]?.name ?? place}` : summary.title}
         </T>
         <T v="meta" c="ink2" num style={{ marginTop: 4 }}>

@@ -1,4 +1,4 @@
-﻿import { db } from "@/lib/db";
+import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { handle, json, readJson } from "@/lib/api-helpers";
 
@@ -18,6 +18,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ tripId:
       departAt?: string;
       arriveAt?: string;
       seat?: string;
+      terminal?: string;
+      gate?: string;
       confirmation?: string;
       price?: number;
       currency?: string;
@@ -38,6 +40,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ tripId:
         departAt: new Date(body.departAt),
         arriveAt: new Date(body.arriveAt),
         seat: body.seat?.trim() || null,
+        terminal: body.terminal?.trim() || null,
+        gate: body.gate?.trim() || null,
         confirmation: body.confirmation?.trim() || null,
         price: Number(body.price) || 0,
         currency: body.currency ?? trip.homeCurrency,

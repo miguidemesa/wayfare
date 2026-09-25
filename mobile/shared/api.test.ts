@@ -35,6 +35,32 @@ describe("request", () => {
     fetchMock.mockReturnValue(Promise.reject(new TypeError("Network request failed")));
     await expect(api.get("/api/trips")).rejects.toMatchObject({ status: 0 });
   });
+
+  it("gives up on a server that never answers, as status 0", async () => {
+    jest.useFakeTimers();
+    try {
+      // A request that only ends when it's aborted, like a hung connection.
+      fetchMock.mockImplementation(
+        (_url: string, init: RequestInit) =>
+          new Promise((_, reject) => init.signal?.addEventListener("abort", () => reject(new Error("aborted"))))
+      );
+      const pending = api.get("/api/trips");
+      jest.advanceTimersByTime(20000);
+      await expect(pending).rejects.toMatchObject({ status: 0 });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("explains a server error in words when the server didn't", async () => {
+    fetchMock.mockReturnValue(
+      Promise.resolve({ ok: false, status: 502, json: () => Promise.reject(new SyntaxError("not JSON")) } as unknown as Response)
+    );
+    await expect(api.get("/api/trips")).rejects.toMatchObject({
+      status: 502,
+      message: "Wayfare is having trouble right now. Try again in a moment.",
+    });
+  });
 });
 
 describe("layOutDays", () => {

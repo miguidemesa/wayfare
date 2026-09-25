@@ -96,7 +96,7 @@ function StopDetail() {
         <T v="label" c="ink3" style={{ marginTop: space.md }}>
           {itemTypeLabel(stop.type)} · {fmtDay(day.date, { weekday: "long", month: "short", day: "numeric" })}
         </T>
-        <T v="display" style={{ marginTop: space.sm }}>
+        <T v="display" style={{ marginTop: space.sm }} accessibilityRole="header">
           {stop.title}
         </T>
         {stop.placeName && stop.placeName !== stop.title ? (
@@ -270,9 +270,9 @@ function EditStop({ onDone }: { onDone: () => void }) {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.paper }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <TopBar fallback="/trips" backLabel="Cancel" onBack={onDone} right={<Button variant="quiet" label={saving ? "Saving…" : "Save"} onPress={saving ? undefined : save} />} />
+      <TopBar fallback="/trips" backLabel="Cancel" onBack={onDone} right={<Button variant="quiet" label={saving ? "Saving…" : "Save"} busy={saving} onPress={save} />} />
       <ScrollView contentContainerStyle={{ paddingHorizontal: GUTTER, paddingBottom: space.xxxl, gap: space.lg }} keyboardShouldPersistTaps="handled">
-        <T v="title" style={{ marginTop: space.md }}>
+        <T v="title" style={{ marginTop: space.md }} accessibilityRole="header">
           Edit stop
         </T>
         <Field label="Name" value={title} onChangeText={setTitle} error={errors.title} />

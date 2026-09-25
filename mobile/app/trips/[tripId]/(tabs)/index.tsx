@@ -30,7 +30,8 @@ export default function PlanScreen() {
 
   const day: ItineraryDay | undefined = bundle.days[dayIndex];
 
-  // A new day starts at the top; leaving reorder mode discards nothing silently.
+  // A new day starts at the top, out of reorder mode. (changeDay saves a
+  // pending order before the day changes, so nothing is lost here.)
   useEffect(() => {
     scroller.current?.scrollTo({ y: 0, animated: false });
     setReordering(false);
@@ -56,7 +57,8 @@ export default function PlanScreen() {
           title="No days laid out yet"
           body="Set up a page for each day of the trip, then fill them in yourself or let Wayfare draft a plan."
           action={layingOut ? "Setting up…" : "Set up my days"}
-          onAction={layingOut ? undefined : handleLayOut}
+          onAction={handleLayOut}
+          actionBusy={layingOut}
           secondary="Draft a whole plan"
           onSecondary={() => router.push(`/trips/${tripId}/suggest`)}
         />
@@ -96,6 +98,13 @@ export default function PlanScreen() {
     }
   }
 
+  // Switching days mid-reorder saves the new order, as tapping Done would.
+  async function changeDay(i: number) {
+    if (i === dayIndex) return;
+    if (reordering) await finishReorder();
+    setDayIndex(i);
+  }
+
   function startReorder() {
     setDraftOrder(day!.items.slice());
     setReordering(true);
@@ -126,11 +135,13 @@ export default function PlanScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <DayStrip bundle={bundle} value={dayIndex} onChange={setDayIndex} />
+      <DayStrip bundle={bundle} value={dayIndex} onChange={(i) => void changeDay(i)} />
       {missing > 0 ? (
         <Pressable
-          onPress={layingOut ? undefined : handleLayOut}
+          onPress={handleLayOut}
+          disabled={layingOut}
           accessibilityRole="button"
+          accessibilityState={{ busy: layingOut }}
           style={({ pressed }) => ({ paddingHorizontal: GUTTER, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.rule, backgroundColor: pressed ? colors.sunk : colors.raised })}
         >
           <T v="meta" c="ink2">
@@ -153,7 +164,7 @@ export default function PlanScreen() {
             <T v="label" c={isToday ? "accent" : "ink3"}>
               {isToday ? "Today · " : ""}Day {dayIndex + 1} · {fmtDay(day.date, { weekday: "long", month: "long", day: "numeric" })}
             </T>
-            <T v="title" style={{ marginTop: 6 }}>
+            <T v="title" style={{ marginTop: 6 }} accessibilityRole="header">
               {day.title || day.city}
             </T>
             {day.title && day.city ? (
@@ -205,7 +216,7 @@ export default function PlanScreen() {
                 ) : (
                   <>
                     <Button variant="quiet" label="Add stop" onPress={() => openAdd()} />
-                    {stats.stops >= 2 ? <Button variant="quiet" label={tidying ? "Tidying…" : "Tidy route"} onPress={tidying ? undefined : handleTidy} accessibilityHint="Reorders stops to cut travel time" /> : null}
+                    {stats.stops >= 2 ? <Button variant="quiet" label={tidying ? "Tidying…" : "Tidy route"} busy={tidying} onPress={handleTidy} accessibilityHint="Reorders stops to cut travel time" /> : null}
                     {stats.stops >= 2 ? <Button variant="quiet" label="Reorder" onPress={startReorder} /> : null}
                   </>
                 )}
@@ -316,7 +327,8 @@ function StopRow({
 
   return (
     <Pressable
-      onPress={reordering ? undefined : onPress}
+      onPress={onPress}
+      disabled={reordering}
       accessibilityRole="button"
       accessibilityLabel={`${item.startTime != null ? fmtClock(item.startTime) + ", " : ""}${item.title}${item.confirmed ? ", booked" : ""}`}
       style={({ pressed }) => ({ flexDirection: "row", paddingHorizontal: GUTTER, paddingVertical: space.md, backgroundColor: pressed ? colors.sunk : "transparent" })}
@@ -352,7 +364,7 @@ function StopRow({
         ) : null}
       </View>
       {reordering ? (
-        <View style={{ justifyContent: "center", gap: 4, marginLeft: 8 }}>
+        <View style={{ justifyContent: "center", gap: 8, marginLeft: 8 }}>
           <MoveButton icon="chevron-up" disabled={!canUp} onPress={() => onMove(-1)} label={`Move ${item.title} earlier`} />
           <MoveButton icon="chevron-down" disabled={!canDown} onPress={() => onMove(1)} label={`Move ${item.title} later`} />
         </View>
@@ -371,13 +383,14 @@ function MoveButton({ icon, disabled, onPress, label }: { icon: "chevron-up" | "
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
-      hitSlop={4}
+      // 40 visible + 2 above and below = 44pt, without the pair's targets overlapping.
+      hitSlop={{ top: 2, bottom: 2, left: 4, right: 4 }}
       style={({ pressed }) => ({
-        width: 36,
-        height: 32,
+        width: 40,
+        height: 40,
         borderRadius: 6,
         borderWidth: 1,
-        borderColor: colors.rule,
+        borderColor: colors.edge,
         alignItems: "center",
         justifyContent: "center",
         opacity: disabled ? 0.3 : pressed ? 0.6 : 1,
@@ -398,7 +411,7 @@ function Leg({ item, onAdd }: { item: ItineraryItem; onAdd: () => void }) {
       onPress={onAdd}
       accessibilityRole="button"
       accessibilityLabel={`${text ? text + ". " : ""}Add a stop after ${item.title}`}
-      style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", paddingHorizontal: GUTTER, minHeight: 30, opacity: pressed ? 0.5 : 1 })}
+      style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", paddingHorizontal: GUTTER, minHeight: 40, opacity: pressed ? 0.5 : 1 })}
     >
       <View style={{ width: TIME_COL, alignItems: "flex-start", paddingLeft: 14 }}>
         <View style={{ width: 1, height: 22, backgroundColor: colors.ruleStrong }} />

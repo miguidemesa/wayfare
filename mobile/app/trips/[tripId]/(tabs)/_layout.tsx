@@ -66,7 +66,7 @@ function TripTabBar({ state, descriptors, navigation, tripId }: BottomTabBarProp
               const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
               if (!focused && !event.defaultPrevented) navigation.navigate(route.name, route.params);
             }}
-            style={{ paddingHorizontal: 10, height: 40, justifyContent: "center" }}
+            style={{ paddingHorizontal: 10, height: 44, justifyContent: "center" }}
           >
             <T v="bodyStrong" style={{ fontSize: 16, color: focused ? colors.ink : colors.ink3 }}>
               {label}
@@ -84,7 +84,7 @@ function TripTabBar({ state, descriptors, navigation, tripId }: BottomTabBarProp
           flexDirection: "row",
           alignItems: "center",
           gap: 6,
-          height: 40,
+          height: 44,
           paddingHorizontal: 14,
           marginRight: 10,
           borderRadius: radii.md,

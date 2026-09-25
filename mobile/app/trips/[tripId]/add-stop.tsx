@@ -120,7 +120,7 @@ function AddStopFlow() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.paper }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <SheetBar title="Add a stop" right={picked ? <Button variant="quiet" label={saving ? "Adding…" : "Add"} onPress={saving ? undefined : save} /> : undefined} />
+      <SheetBar title="Add a stop" right={picked ? <Button variant="quiet" label={saving ? "Adding…" : "Add"} busy={saving} onPress={save} /> : undefined} />
 
       {!picked ? (
         <View style={{ flex: 1 }}>

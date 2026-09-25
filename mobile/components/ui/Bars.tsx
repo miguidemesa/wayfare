@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Pressable, View } from "react-native";
+import { Platform, Pressable, View } from "react-native";
 import { router, type Href } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -46,7 +46,7 @@ export function TopBar({
         </Pressable>
         <View style={{ flex: 1, alignItems: "center" }}>
           {title ? (
-            <T v="bodyStrong" numberOfLines={1}>
+            <T v="bodyStrong" numberOfLines={1} accessibilityRole="header">
               {title}
             </T>
           ) : null}
@@ -73,10 +73,15 @@ export function SheetBar({
   right?: ReactNode;
 }) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  // iOS presents modals as page sheets below the status bar. Android shows
+  // them full-screen, edge to edge, so the bar has to clear the status bar.
+  const top = Platform.OS === "android" ? insets.top : 0;
   return (
     <View
       style={{
-        height: 54,
+        height: 54 + top,
+        paddingTop: top,
         flexDirection: "row",
         alignItems: "center",
         paddingHorizontal: GUTTER,
@@ -88,6 +93,7 @@ export function SheetBar({
       <Pressable
         onPress={onCancel ?? (() => router.back())}
         accessibilityRole="button"
+        accessibilityLabel={cancelLabel}
         hitSlop={10}
         style={({ pressed }) => ({ minWidth: 64, opacity: pressed ? 0.5 : 1 })}
       >
@@ -96,7 +102,7 @@ export function SheetBar({
         </T>
       </Pressable>
       <View style={{ flex: 1, alignItems: "center" }}>
-        <T v="bodyStrong" numberOfLines={1}>
+        <T v="bodyStrong" numberOfLines={1} accessibilityRole="header">
           {title}
         </T>
       </View>

@@ -53,7 +53,7 @@ export function TripMasthead({ bundle }: { bundle: TripBundle }) {
         </Pressable>
       </View>
       <View style={{ paddingTop: 2, paddingBottom: 10 }}>
-        <T v="title" numberOfLines={1}>
+        <T v="title" numberOfLines={1} accessibilityRole="header">
           {trip.title}
         </T>
         <T v="meta" c="ink2" num numberOfLines={1} style={{ marginTop: 2 }}>

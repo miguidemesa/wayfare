@@ -22,7 +22,7 @@ export function Rule({ inset = 0, strong, style }: { inset?: number; strong?: bo
 export function SectionLabel({ children, action, style }: { children: string; action?: ReactNode; style?: StyleProp<ViewStyle> }) {
   return (
     <View style={[{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: space.sm }, style]}>
-      <T v="label" c="ink3">
+      <T v="label" c="ink3" accessibilityRole="header">
         {children}
       </T>
       {action}
@@ -66,7 +66,8 @@ export const Field = forwardRef<TextInput, FieldProps>(function Field({ label, h
   return (
     <View style={{ gap: 6 }}>
       {label ? (
-        <T v="label" c="ink3">
+        // The input announces the label itself; don't read it twice.
+        <T v="label" c="ink3" importantForAccessibility="no" accessibilityElementsHidden>
           {label}
         </T>
       ) : null}
@@ -74,6 +75,8 @@ export const Field = forwardRef<TextInput, FieldProps>(function Field({ label, h
         ref={ref}
         placeholderTextColor={colors.ink3}
         selectionColor={colors.accent}
+        accessibilityLabel={label}
+        accessibilityHint={error ?? hint}
         {...rest}
         style={[
           {
@@ -82,7 +85,7 @@ export const Field = forwardRef<TextInput, FieldProps>(function Field({ label, h
             color: colors.ink,
             backgroundColor: colors.raised,
             borderWidth: 1,
-            borderColor: error ? colors.danger : colors.rule,
+            borderColor: error ? colors.danger : colors.edge,
             borderRadius: radii.md,
             paddingHorizontal: 14,
             paddingVertical: 12,
@@ -93,7 +96,7 @@ export const Field = forwardRef<TextInput, FieldProps>(function Field({ label, h
         ]}
       />
       {error ? (
-        <T v="small" c="danger">
+        <T v="small" c="danger" accessibilityLiveRegion="polite">
           {error}
         </T>
       ) : hint ? (
@@ -130,14 +133,16 @@ export function Choices<K extends string>({
             key={o.key}
             onPress={() => onChange(o.key)}
             accessibilityRole="radio"
-            accessibilityState={{ selected: on }}
+            accessibilityState={{ checked: on }}
+            // 36 visible + 4 above and below = a 44pt target.
+            hitSlop={{ top: 4, bottom: 4 }}
             style={({ pressed }) => ({
               paddingHorizontal: 12,
               height: 36,
               justifyContent: "center",
               borderRadius: radii.sm,
               borderWidth: 1,
-              borderColor: on ? colors.ink : colors.rule,
+              borderColor: on ? colors.ink : colors.edge,
               backgroundColor: on ? colors.ink : pressed ? colors.sunk : colors.raised,
             })}
           >
@@ -157,6 +162,7 @@ export function Empty({
   body,
   action,
   onAction,
+  actionBusy,
   secondary,
   onSecondary,
   style,
@@ -165,13 +171,17 @@ export function Empty({
   body?: string;
   action?: string;
   onAction?: () => void;
+  /** The action is running: keep its label, block repeat taps. */
+  actionBusy?: boolean;
   secondary?: string;
   onSecondary?: () => void;
   style?: StyleProp<ViewStyle>;
 }) {
   return (
     <View style={[{ paddingVertical: space.xxl, gap: space.sm }, style]}>
-      <T v="heading">{title}</T>
+      <T v="heading" accessibilityRole="header">
+        {title}
+      </T>
       {body ? (
         <T v="body" c="ink2" style={{ maxWidth: 340 }}>
           {body}
@@ -179,7 +189,7 @@ export function Empty({
       ) : null}
       {action || secondary ? (
         <View style={{ flexDirection: "row", gap: space.lg, alignItems: "center", marginTop: space.md }}>
-          {action ? <Button label={action} onPress={onAction} /> : null}
+          {action ? <Button label={action} onPress={onAction} busy={actionBusy} /> : null}
           {secondary ? <Button label={secondary} variant="quiet" onPress={onSecondary} /> : null}
         </View>
       ) : null}

@@ -53,7 +53,7 @@ export default function Login() {
         keyboardShouldPersistTaps="handled"
       >
         <T v="entry">Wayfare</T>
-        <T v="display" style={{ marginTop: space.xxl, maxWidth: 360 }}>
+        <T v="display" style={{ marginTop: space.xxl, maxWidth: 360 }} accessibilityRole="header">
           Your trip, day by day.
         </T>
         <T v="body" c="ink2" style={{ marginTop: space.md, maxWidth: 360 }}>

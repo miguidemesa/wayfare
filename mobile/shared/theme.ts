@@ -14,9 +14,10 @@ export type ThemeColors = {
   sunk: string; // input wells, pressed rows, skeletons
   ink: string; // primary text + primary buttons
   ink2: string; // secondary text
-  ink3: string; // tertiary text, placeholders
-  rule: string; // hairlines
-  ruleStrong: string; // input borders, active dividers
+  ink3: string; // tertiary text, placeholders (still 4.5:1 on paper and raised)
+  rule: string; // hairlines: decorative, so exempt from contrast minimums
+  ruleStrong: string; // active dividers
+  edge: string; // borders of controls (fields, chips): 3:1 on raised, so they read as controls
   accent: string; // "now", selection, the primary action
   accentSoft: string; // accent wash behind selected text
   onAccent: string;
@@ -34,15 +35,16 @@ const LIGHT: ThemeColors = {
   sunk: "#EAE5DA",
   ink: "#1C1B18",
   ink2: "#5C574E",
-  ink3: "#8E887C",
+  ink3: "#6E685D",
   rule: "#DCD5C7",
   ruleStrong: "#C4BBA9",
-  accent: "#C2462B",
+  edge: "#918877",
+  accent: "#B03D22",
   accentSoft: "#F3DED6",
   onAccent: "#FFFFFF",
   onInk: "#F4F1EA",
   positive: "#3D6A4C",
-  caution: "#A0661A",
+  caution: "#8A5712",
   danger: "#A3281D",
   dangerSoft: "#F2DCD8",
   scrim: "rgba(28, 27, 24, 0.38)",
@@ -56,9 +58,10 @@ const DARK: ThemeColors = {
   sunk: "#282521",
   ink: "#EDE8DE",
   ink2: "#AAA396",
-  ink3: "#787265",
+  ink3: "#918A7D",
   rule: "#312D28",
   ruleStrong: "#453F37",
+  edge: "#766F62",
   accent: "#E36A4D",
   accentSoft: "#3A221B",
   onAccent: "#161513",

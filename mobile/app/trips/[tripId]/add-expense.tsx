@@ -156,7 +156,7 @@ function ExpenseForm({ existing }: { existing?: Expense }) {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.paper }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <SheetBar title={existing ? "Edit expense" : "Log expense"} right={<Button variant="quiet" label={saving ? "Saving…" : "Save"} onPress={saving ? undefined : save} />} />
+      <SheetBar title={existing ? "Edit expense" : "Log expense"} right={<Button variant="quiet" label={saving ? "Saving…" : "Save"} busy={saving} onPress={save} />} />
       <ScrollView contentContainerStyle={{ paddingHorizontal: GUTTER, paddingBottom: space.xxxl, gap: space.xl }} keyboardShouldPersistTaps="handled">
         <View style={{ paddingTop: space.xl }}>
           <View style={{ flexDirection: "row", alignItems: "baseline", gap: 10 }}>

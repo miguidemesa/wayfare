@@ -43,7 +43,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ tripId
       pace?: string;
       interests?: string[];
       status?: string;
-      notes?: string;
+      notes?: string | null;
       startDate?: string;
       endDate?: string;
     }>(req);
@@ -61,8 +61,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ tripId
     if (body.pace != null) patch.pace = body.pace;
     if (body.interests != null) patch.interests = JSON.stringify(body.interests);
     if (body.status != null) patch.status = body.status;
-    if (body.notes != null) patch.notes = body.notes;
-    
+    // undefined leaves notes alone; null or "" clears them.
+    if (body.notes !== undefined) patch.notes = body.notes?.trim() || null;
+
     if (body.startDate || body.endDate) {
       const s = body.startDate ? new Date(body.startDate + "T00:00:00") : trip.startDate;
       const e = body.endDate ? new Date(body.endDate + "T23:59:59") : trip.endDate;
