@@ -2,7 +2,7 @@ name: Web CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths-ignore:
       - "mobile/**"
   pull_request:

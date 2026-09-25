@@ -2,7 +2,7 @@ name: Mobile CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - "mobile/**"
       - ".github/workflows/mobile-ci.yml"
@@ -37,3 +37,9 @@ jobs:
 
       - name: Test
         run: npm test -- --ci
+
+      # Date bugs only show on a phone far from the server's timezone.
+      - name: Test (phone at UTC−10)
+        run: npm test -- --ci
+        env:
+          TZ: Pacific/Honolulu
