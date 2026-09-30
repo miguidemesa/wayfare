@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { fmtMoney, fonts, GUTTER, radii, space, TABULAR_NUMS, useTheme } from "@/shared/theme";
+import { fadeIn, useTransition } from "@/lib/motion";
+import { Press } from "@/components/ui/Press";
 import { convert, localCurrency } from "@/shared/trip";
 import { SUPPORTED_CURRENCIES } from "@/shared/types";
 import { useTrip } from "@/lib/trip";
@@ -22,6 +25,9 @@ export default function Currency() {
   const [to, setTo] = useState(home === local ? "USD" : home);
   const [amount, setAmount] = useState("1000");
   const [picking, setPicking] = useState<"from" | "to" | null>(null);
+  // Half-turns of the swap arrows, one per swap.
+  const [swaps, setSwaps] = useState(0);
+  const turn = useTransition("transform");
 
   useEffect(() => {
     void ensureRates();
@@ -41,17 +47,24 @@ export default function Currency() {
           ? rates.source === "live"
             ? `Live rates, updated ${new Date(rates.updatedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
             : rates.source === "cached"
-              ? `Saved rates from ${new Date(rates.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} — live rates unavailable`
-              : "Reference rates — live rates unavailable right now"
+              ? `Saved rates from ${new Date(rates.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}. Live rates are unavailable.`
+              : "Reference rates. Live rates are unavailable right now."
           : "Loading rates…"
       }
     >
       <View style={{ paddingHorizontal: GUTTER, gap: space.lg }}>
         <View>
-          <Pressable onPress={() => setPicking(picking === "from" ? null : "from")} accessibilityRole="button" accessibilityLabel={`Converting from ${from}. Change`}>
+          <Pressable
+            onPress={() => setPicking(picking === "from" ? null : "from")}
+            accessibilityRole="button"
+            accessibilityLabel={`Converting from ${from}. Change`}
+            hitSlop={15}
+            style={({ pressed }) => ({ alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 4, opacity: pressed ? 0.5 : 1 })}
+          >
             <T v="label" c="accent">
-              {from} ▾
+              {from}
             </T>
+            <Ionicons name={picking === "from" ? "chevron-up" : "chevron-down"} size={12} color={colors.accent} />
           </Pressable>
           <TextInput
             value={amount}
@@ -63,26 +76,40 @@ export default function Currency() {
           />
           <Rule strong />
         </View>
-        {picking === "from" ? <Choices options={options} value={from} onChange={(c) => { setFrom(c); setPicking(null); }} /> : null}
+        {picking === "from" ? (
+          <Animated.View entering={fadeIn}>
+            <Choices options={options} value={from} onChange={(c) => { setFrom(c); setPicking(null); }} />
+          </Animated.View>
+        ) : null}
 
-        <Pressable
+        <Press
           onPress={() => {
             setFrom(to);
             setTo(from);
+            setSwaps((n) => n + 1);
           }}
           accessibilityRole="button"
           accessibilityLabel="Swap currencies"
-          style={({ pressed }) => ({ alignSelf: "flex-start", flexDirection: "row", gap: 6, alignItems: "center", paddingVertical: 6, paddingHorizontal: 10, borderRadius: radii.sm, borderWidth: 1, borderColor: colors.rule, opacity: pressed ? 0.6 : 1 })}
+          style={{ alignSelf: "flex-start", flexDirection: "row", gap: 6, alignItems: "center", height: 44, paddingHorizontal: 14, borderRadius: radii.md, borderCurve: "continuous", borderWidth: 1, borderColor: colors.rule }}
         >
-          <Ionicons name="swap-vertical" size={16} color={colors.ink} />
+          <Animated.View style={[{ transform: [{ rotate: `${swaps * 180}deg` }] }, turn]}>
+            <Ionicons name="swap-vertical" size={16} color={colors.ink} />
+          </Animated.View>
           <T v="meta">Swap</T>
-        </Pressable>
+        </Press>
 
         <View>
-          <Pressable onPress={() => setPicking(picking === "to" ? null : "to")} accessibilityRole="button" accessibilityLabel={`Converting to ${to}. Change`}>
+          <Pressable
+            onPress={() => setPicking(picking === "to" ? null : "to")}
+            accessibilityRole="button"
+            accessibilityLabel={`Converting to ${to}. Change`}
+            hitSlop={15}
+            style={({ pressed }) => ({ alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 4, opacity: pressed ? 0.5 : 1 })}
+          >
             <T v="label" c="accent">
-              {to} ▾
+              {to}
             </T>
+            <Ionicons name={picking === "to" ? "chevron-up" : "chevron-down"} size={12} color={colors.accent} />
           </Pressable>
           <T v="figure" num style={{ marginTop: 4 }} accessibilityLiveRegion="polite">
             {out != null ? fmtMoney(Math.round(out * 100) / 100, to) : "—"}
@@ -93,7 +120,11 @@ export default function Currency() {
             </T>
           ) : null}
         </View>
-        {picking === "to" ? <Choices options={options} value={to} onChange={(c) => { setTo(c); setPicking(null); }} /> : null}
+        {picking === "to" ? (
+          <Animated.View entering={fadeIn}>
+            <Choices options={options} value={to} onChange={(c) => { setTo(c); setPicking(null); }} />
+          </Animated.View>
+        ) : null}
 
         {r ? (
           <View style={{ marginTop: space.lg }}>

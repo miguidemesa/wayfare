@@ -2,12 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated from "react-native-reanimated";
+import { enterFrom } from "@/lib/motion";
 import { addHotel, ApiError, createTrip, fetchPreferences, layOutDays, saveTripBrief, type Place } from "@/shared/api";
 import { AVOIDS, briefFromPreferences, describeParty, DIETS, emptyBrief, INTERESTS, type TripBrief } from "@/shared/brief";
 import { fmtClock, fmtDay, fmtMoney, GUTTER, space, useTheme } from "@/shared/theme";
 import { SheetBar } from "@/components/ui/Bars";
 import { Button } from "@/components/ui/Button";
-import { Choices, Field, Rule } from "@/components/ui/Primitives";
+import { Choices, Field, Meter, Rule } from "@/components/ui/Primitives";
 import { T } from "@/components/ui/T";
 import {
   ArrivalStep,
@@ -63,6 +65,9 @@ export default function NewTrip() {
   const [brief, setBriefState] = useState<TripBrief>(emptyBrief);
   const [prefilled, setPrefilled] = useState(false);
   const [index, setIndex] = useState(0);
+  // Which way the last move went, so the next question comes from that side.
+  // Null until the first move: the opening question arrives with the sheet.
+  const [dir, setDir] = useState<1 | -1 | null>(null);
   const [status, setStatus] = useState<"idle" | "creating" | "laying">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -198,6 +203,7 @@ export default function NewTrip() {
   }
 
   function move(i: number) {
+    setDir(i < index ? -1 : 1);
     setIndex(i);
     setError(null);
     scroller.current?.scrollTo({ y: 0, animated: false });
@@ -264,23 +270,30 @@ export default function NewTrip() {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.paper }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <SheetBar title="New trip" />
-      <View style={{ height: 3, backgroundColor: colors.rule }} accessibilityRole="progressbar" accessibilityValue={{ min: 1, max: steps.length, now: index + 1, text: `Question ${index + 1} of ${steps.length}` }}>
-        <View style={{ height: 3, width: `${((index + 1) / steps.length) * 100}%`, backgroundColor: colors.accent }} />
-      </View>
+      <Meter
+        value={(index + 1) / steps.length}
+        color={colors.accent}
+        track={colors.rule}
+        style={{ borderRadius: 0 }}
+        accessibilityRole="progressbar"
+        accessibilityValue={{ min: 1, max: steps.length, now: index + 1, text: `Question ${index + 1} of ${steps.length}` }}
+      />
       <ScrollView ref={scroller} contentContainerStyle={{ paddingHorizontal: GUTTER, paddingTop: space.xl, paddingBottom: space.xxxl }} keyboardShouldPersistTaps="handled">
-        <T v="label" c="ink3" num>
-          {index + 1} of {steps.length}
-          {prefilled && PREFILLED_STEPS.has(step.key) ? " · Filled in from your last trip" : ""}
-        </T>
-        <T v="title" accessibilityRole="header" style={{ marginTop: 6 }}>
-          {step.ask}
-        </T>
-        {step.why ? (
-          <T v="body" c="ink2" style={{ marginTop: 6 }}>
-            {step.why}
+        <Animated.View key={step.key} entering={dir ? enterFrom(dir, 28, 260) : undefined}>
+          <T v="label" c="ink3" num>
+            {index + 1} of {steps.length}
+            {prefilled && PREFILLED_STEPS.has(step.key) ? " · Filled in from your last trip" : ""}
           </T>
-        ) : null}
-        <View style={{ marginTop: space.xl }}>{step.body}</View>
+          <T v="title" accessibilityRole="header" style={{ marginTop: 6 }}>
+            {step.ask}
+          </T>
+          {step.why ? (
+            <T v="body" c="ink2" style={{ marginTop: 6 }}>
+              {step.why}
+            </T>
+          ) : null}
+          <View style={{ marginTop: space.xl }}>{step.body}</View>
+        </Animated.View>
         {error ? (
           <T v="meta" c="danger" style={{ marginTop: space.lg }} accessibilityLiveRegion="polite">
             {error}

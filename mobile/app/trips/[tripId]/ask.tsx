@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, { useReducedMotion } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
+import { enterUp, fadeIn } from "@/lib/motion";
+import { Press } from "@/components/ui/Press";
 import { ApiError, askConcierge, fetchConversation } from "@/shared/api";
 import { fmtClock, fmtDay, fmtMoney, fonts, GUTTER, radii, space, useTheme } from "@/shared/theme";
 import { dailyAllowance, dayKey, localKey, nextStop, totalSpent } from "@/shared/trip";
@@ -30,7 +33,7 @@ type Turn = { id: string; role: "user" | "assistant"; content: string; changed?:
 const CONTEXT_PREFIX = /^\[Viewing [^\]]+\]\s*/;
 
 // The concierge's quick prompts, kept from the previous version.
-const EXAMPLES = ["Relax the schedule — we need rest", "Rainy afternoon alternatives", "Dinner near our hotel", "A scenic morning walking route", "Move the museum to tomorrow"];
+const EXAMPLES = ["Relax the schedule, we need rest", "Rainy afternoon alternatives", "Dinner near our hotel", "A scenic morning walking route", "Move the museum to tomorrow"];
 
 export default function Ask() {
   const { colors } = useTheme();
@@ -138,33 +141,40 @@ export default function Ask() {
         ) : (
           turns.map((t) =>
             t.role === "user" ? (
-              <T key={t.id} v="aside" c="ink2" style={{ fontSize: 17, lineHeight: 23, marginTop: space.sm }}>
-                “{t.content}”
-              </T>
+              <Animated.View key={t.id} entering={enterUp(0)}>
+                <T v="aside" c="ink2" style={{ fontSize: 17, lineHeight: 23, marginTop: space.sm }}>
+                  “{t.content}”
+                </T>
+              </Animated.View>
             ) : (
-              <View key={t.id} style={{ gap: space.sm }}>
+              <Animated.View key={t.id} entering={enterUp(0)} style={{ gap: space.sm }}>
                 <T v="body" c={t.failed ? "danger" : "ink"}>
                   {t.content}
                 </T>
                 {t.changed ? (
-                  <Pressable onPress={() => router.back()} accessibilityRole="button" style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 6, opacity: pressed ? 0.5 : 1 })}>
+                  <Pressable
+                    onPress={() => router.back()}
+                    accessibilityRole="button"
+                    hitSlop={13}
+                    style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 6, opacity: pressed ? 0.5 : 1 })}
+                  >
                     <Ionicons name="checkmark" size={16} color={colors.positive} />
                     <T v="meta" c="positive">
-                      Your plan was updated — see it
+                      Your plan was updated. See it
                     </T>
                   </Pressable>
                 ) : null}
-              </View>
+              </Animated.View>
             )
           )
         )}
         {sending ? (
-          <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-            <ActivityIndicator size="small" color={colors.ink3} />
+          <Animated.View entering={fadeIn} style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
+            <TypingDots />
             <T v="meta" c="ink3">
               Working on it…
             </T>
-          </View>
+          </Animated.View>
         ) : null}
       </ScrollView>
 
@@ -214,28 +224,57 @@ export default function Ask() {
             maxHeight: 120,
           }}
         />
-        <Pressable
+        <Press
           onPress={() => void send()}
           disabled={!input.trim() || sending}
           accessibilityRole="button"
           accessibilityLabel="Send"
-          style={({ pressed }) => ({
+          scaleTo={0.92}
+          style={{
             width: 44,
             height: 44,
             borderRadius: radii.md,
+            borderCurve: "continuous",
             backgroundColor: colors.ink,
             alignItems: "center",
             justifyContent: "center",
-            opacity: !input.trim() || sending ? 0.35 : pressed ? 0.7 : 1,
-          })}
+            opacity: !input.trim() || sending ? 0.35 : 1,
+          }}
         >
           <Ionicons name="arrow-up" size={20} color={colors.onInk} />
-        </Pressable>
+        </Press>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
+
+const BREATH = { "0%": { opacity: 0.3 }, "40%": { opacity: 1 }, "80%": { opacity: 0.3 }, "100%": { opacity: 0.3 } };
+
+/** Wayfare is thinking: three dots breathing in turn (still under Reduce Motion). */
+function TypingDots() {
+  const { colors } = useTheme();
+  const reduce = useReducedMotion();
+  return (
+    <View style={{ flexDirection: "row", gap: 5 }} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+      {[0, 160, 320].map((delay) => (
+        <Animated.View
+          key={delay}
+          style={[
+            { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.ink3, opacity: reduce ? 0.6 : 1 },
+            !reduce && {
+              animationName: BREATH,
+              animationDuration: 1200,
+              animationDelay: delay,
+              animationIterationCount: "infinite",
+              animationTimingFunction: "ease-in-out",
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
 
 /** Travel briefing from real trip state: what's next, weather, budget pace. */
 function Briefing() {

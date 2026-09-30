@@ -10,6 +10,7 @@ import { DayStrip } from "@/components/trip/TripChrome";
 import { RouteMap } from "@/components/map/RouteMap";
 import type { MapData } from "@/components/map/mapHtml";
 import { Button } from "@/components/ui/Button";
+import { Press } from "@/components/ui/Press";
 import { Rule } from "@/components/ui/Primitives";
 import { T } from "@/components/ui/T";
 
@@ -195,23 +196,24 @@ export default function MapScreen() {
 function MapButton({ icon, label, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }) {
   const { colors } = useTheme();
   return (
-    <Pressable
+    <Press
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={({ pressed }) => ({
-        width: 40,
-        height: 40,
+      scaleTo={0.92}
+      style={{
+        width: 44,
+        height: 44,
         borderRadius: radii.md,
+        borderCurve: "continuous",
         backgroundColor: colors.raised,
         borderWidth: 1,
         borderColor: colors.rule,
         alignItems: "center",
         justifyContent: "center",
-        opacity: pressed ? 0.7 : 1,
-      })}
+      }}
     >
       <Ionicons name={icon} size={18} color={colors.ink} />
-    </Pressable>
+    </Press>
   );
 }

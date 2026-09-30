@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+import Animated from "react-native-reanimated";
+import { enterUp } from "@/lib/motion";
+import { SpineItem } from "@/components/ui/Spine";
 import { ApiError, generateItineraryPlan } from "@/shared/api";
 import { fmtClock, fmtDay, fmtDuration, fmtMoney, GUTTER, space, useTheme } from "@/shared/theme";
 import { dayKey, transportLabel } from "@/shared/trip";
 import { useLoadedTrip, useTrip } from "@/lib/trip";
 import { SheetBar } from "@/components/ui/Bars";
 import { Button } from "@/components/ui/Button";
-import { Choices, Empty, Loading, Rule } from "@/components/ui/Primitives";
+import { Choices, Empty, Loading, Skeleton } from "@/components/ui/Primitives";
 import { T } from "@/components/ui/T";
 import { useToast } from "@/components/ui/Toast";
 
@@ -131,11 +134,24 @@ function SuggestFlow() {
       <SheetBar title={title} />
 
       {phase === "drafting" ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: space.md }}>
-          <ActivityIndicator color={colors.ink3} />
-          <T v="aside" c="ink2">
+        // The draft's shape while it's worked out: day headings over rows.
+        <View style={{ flex: 1, paddingHorizontal: GUTTER, paddingTop: space.xl, gap: space.xl }} accessibilityState={{ busy: true }}>
+          <T v="aside" c="ink2" accessibilityLiveRegion="polite">
             Arranging {single ? "the day" : `${days.length || "your"} days`} around {cities || "your destination"}…
           </T>
+          {(single ? [0] : [0, 1]).map((d) => (
+            <View key={d} style={{ gap: space.sm }} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+              <Skeleton width="32%" height={11} />
+              <Skeleton width="54%" height={24} />
+              <View style={{ height: 1, marginVertical: space.xs, backgroundColor: colors.rule }} />
+              {(["64%", "50%", "58%"] as const).map((w) => (
+                <View key={w} style={{ flexDirection: "row", gap: space.lg, paddingVertical: 6 }}>
+                  <Skeleton width={42} height={13} />
+                  <Skeleton width={w} height={16} />
+                </View>
+              ))}
+            </View>
+          ))}
         </View>
       ) : phase === "setup" ? (
         <ScrollView contentContainerStyle={{ paddingHorizontal: GUTTER, paddingBottom: space.xxxl, gap: space.xl }}>
@@ -207,46 +223,37 @@ function SuggestFlow() {
             ) : null}
           </View>
 
-          {draft!.map((d) => {
+          {draft!.map((d, di) => {
             const idx = days.findIndex((x) => dayKey(x.date) === dayKey(d.date));
             return (
-              <View key={d.date} style={{ marginBottom: space.lg }}>
-                <View style={{ paddingHorizontal: GUTTER, paddingVertical: space.sm }}>
-                  <T v="label" c="ink3">
-                    {idx >= 0 ? `Day ${idx + 1} · ` : ""}
-                    {fmtDay(d.date, { weekday: "long", month: "short", day: "numeric" })}
-                  </T>
-                  <T v="heading" style={{ marginTop: 2 }}>
-                    {d.title || d.city}
-                  </T>
-                </View>
-                <Rule style={{ marginHorizontal: GUTTER }} />
+              // The finished draft lays itself out a day at a time.
+              <Animated.View key={d.date} entering={enterUp(di)} style={{ marginBottom: space.md }}>
+                <SpineItem mark="day" label={`${idx >= 0 ? `Day ${idx + 1} · ` : ""}${fmtDay(d.date, { weekday: "long", month: "short", day: "numeric" })}`} style={{ paddingBottom: space.sm }}>
+                  <T v="heading">{d.title || d.city}</T>
+                </SpineItem>
                 {d.items.map((it, i) => (
-                  <View key={`${d.date}-${i}`} style={{ paddingHorizontal: GUTTER }}>
-                    <View style={{ flexDirection: "row", paddingVertical: 10 }}>
-                      <T v="meta" num style={{ width: 58 }}>
-                        {fmtClock(it.startTime)}
+                  <View key={`${d.date}-${i}`}>
+                    <SpineItem mark="stop" label={fmtClock(it.startTime)} padTop={8} style={{ paddingBottom: space.sm }}>
+                      <T v="bodyStrong">{it.title}</T>
+                      <T v="small" c="ink3">
+                        {[it.neighborhood, fmtDuration(it.durationMin)].filter(Boolean).join(" · ")}
                       </T>
-                      <View style={{ flex: 1 }}>
-                        <T v="bodyStrong">{it.title}</T>
-                        <T v="small" c="ink3">
-                          {[it.neighborhood, fmtDuration(it.durationMin)].filter(Boolean).join(" · ")}
+                      {it.reason ? (
+                        <T v="aside" c="ink2" style={{ fontSize: 14, lineHeight: 19 }}>
+                          {it.reason}
                         </T>
-                        {it.reason ? (
-                          <T v="aside" c="ink2" style={{ marginTop: 2, fontSize: 14, lineHeight: 19 }}>
-                            {it.reason}
-                          </T>
-                        ) : null}
-                      </View>
-                    </View>
+                      ) : null}
+                    </SpineItem>
                     {it.transportMin && i < d.items.length - 1 ? (
-                      <T v="aside" c="ink3" style={{ paddingLeft: 58, fontSize: 13 }}>
-                        {fmtDuration(it.transportMin)} {transportLabel(it.transportMode)}
-                      </T>
+                      <SpineItem padTop={0} style={{ paddingBottom: 6 }}>
+                        <T v="aside" c="ink3" style={{ fontSize: 13 }}>
+                          {fmtDuration(it.transportMin)} {transportLabel(it.transportMode)}
+                        </T>
+                      </SpineItem>
                     ) : null}
                   </View>
                 ))}
-              </View>
+              </Animated.View>
             );
           })}
 

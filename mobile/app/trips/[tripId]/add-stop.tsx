@@ -144,7 +144,7 @@ function AddStopFlow() {
                       Add “{query.trim()}”
                     </T>
                     <T v="small" c="ink3">
-                      As your own stop — it won’t have a map pin
+                      As your own stop, without a map pin
                     </T>
                   </View>
                 </Pressable>

@@ -1,0 +1,42 @@
+{
+  "name": "marketing",
+  "version": "1.0.0",
+  "description": "My Remotion video",
+  "repository": {},
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "@react-three/fiber": "^9.8.1",
+    "@remotion/cli": "4.0.529",
+    "@remotion/google-fonts": "4.0.529",
+    "@remotion/media": "4.0.529",
+    "@remotion/three": "4.0.529",
+    "@remotion/transitions": "4.0.529",
+    "maplibre-gl": "^6.11.2",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.529",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@remotion/eslint-config-flat": "4.0.529",
+    "@types/react": "19.2.7",
+    "@types/three": "^0.186.0",
+    "@types/web": "0.0.166",
+    "d3-geo": "^3.1.1",
+    "eslint": "9.19.0",
+    "prettier": "3.8.1",
+    "topojson-client": "^3.1.0",
+    "typescript": "5.9.3",
+    "world-atlas": "^2.0.2"
+  },
+  "scripts": {
+    "dev": "remotion studio",
+    "build": "remotion bundle",
+    "upgrade": "remotion upgrade",
+    "lint": "eslint src && tsc"
+  },
+  "sideEffects": [
+    "*.css"
+  ]
+}

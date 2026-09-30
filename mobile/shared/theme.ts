@@ -112,9 +112,18 @@ export const GUTTER = 20;
 
 export const radii = { sm: 4, md: 8, lg: 14, full: 999 } as const;
 
-// Motion: short, eased, never bouncy. Screens use native platform transitions;
-// these durations are for in-place changes (selection, reveal, reorder).
-export const motion = { fast: 160, base: 220, slow: 320 } as const;
+// Motion: short, eased, never bouncy. Pushed screens and sheets use each
+// platform's native transition; these are for in-place changes (press,
+// selection, reveal, reorder). Reduce Motion turns every one of them off.
+export const motion = {
+  fast: 160, // press release, selection, toggles
+  base: 220, // enter and exit, indicator glide, day change
+  slow: 320, // progress, bars, first reveal
+  stagger: 40, // per row, first six rows only
+  press: 0.97, // how far a pressed control sinks
+  /** "Settle": a quick start that eases into place, as a cubic bezier. */
+  ease: [0.22, 1, 0.36, 1],
+} as const;
 
 export type Theme = { colors: ThemeColors; dark: boolean };
 

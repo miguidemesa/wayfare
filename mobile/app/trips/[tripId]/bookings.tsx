@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
+import Animated from "react-native-reanimated";
+import { enterUp, fadeOut } from "@/lib/motion";
 import { addFlight, addHotel, addReservation, ApiError, deleteFlight, deleteHotel, deleteReservation } from "@/shared/api";
 import { fmtDate, fmtDay, fmtMoney, GUTTER, space, useTheme } from "@/shared/theme";
 import { dayKey, parseClock } from "@/shared/trip";
@@ -62,7 +64,11 @@ export default function Bookings() {
 
   return (
     <SubScreen title="Bookings" scrollTopWhen={adding} intro="Where you're staying, how you're getting there, and anything reserved." right={!adding ? <Button variant="quiet" label="Add" onPress={() => setAdding(true)} /> : undefined}>
-      {adding ? <AddBooking onDone={() => setAdding(false)} /> : null}
+      {adding ? (
+        <Animated.View entering={enterUp(0)} exiting={fadeOut}>
+          <AddBooking onDone={() => setAdding(false)} />
+        </Animated.View>
+      ) : null}
 
       {none && !adding ? (
         <View style={{ paddingHorizontal: GUTTER }}>

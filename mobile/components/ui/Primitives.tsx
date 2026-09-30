@@ -1,16 +1,21 @@
-import { forwardRef, type ReactNode } from "react";
+import { forwardRef, useEffect, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Pressable,
   TextInput,
   View,
+  type DimensionValue,
   type StyleProp,
   type TextInputProps,
+  type ViewProps,
   type ViewStyle,
 } from "react-native";
-import { fonts, GUTTER, radii, space, TABULAR_NUMS, useTheme } from "@/shared/theme";
+import Animated, { ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withTiming } from "react-native-reanimated";
+import { fonts, GUTTER, motion, radii, space, TABULAR_NUMS, type, useTheme } from "@/shared/theme";
+import { settle, useTransition } from "@/lib/motion";
 import { T } from "./T";
 import { Button } from "./Button";
+import { Press } from "./Press";
 
 /** Hairline. The primary structural device — used where other apps use cards. */
 export function Rule({ inset = 0, strong, style }: { inset?: number; strong?: boolean; style?: StyleProp<ViewStyle> }) {
@@ -123,35 +128,11 @@ export function Choices<K extends string>({
   onChange: (key: K) => void;
   wrap?: boolean;
 }) {
-  const { colors } = useTheme();
   return (
     <View style={{ flexDirection: "row", flexWrap: wrap ? "wrap" : "nowrap", gap: 6 }}>
-      {options.map((o) => {
-        const on = o.key === value;
-        return (
-          <Pressable
-            key={o.key}
-            onPress={() => onChange(o.key)}
-            accessibilityRole="radio"
-            aria-checked={on}
-            // 36 visible + 4 above and below = a 44pt target.
-            hitSlop={{ top: 4, bottom: 4 }}
-            style={({ pressed }) => ({
-              paddingHorizontal: 12,
-              height: 36,
-              justifyContent: "center",
-              borderRadius: radii.sm,
-              borderWidth: 1,
-              borderColor: on ? colors.ink : colors.edge,
-              backgroundColor: on ? colors.ink : pressed ? colors.sunk : colors.raised,
-            })}
-          >
-            <T v="meta" style={{ color: on ? colors.onInk : colors.ink2 }}>
-              {o.label}
-            </T>
-          </Pressable>
-        );
-      })}
+      {options.map((o) => (
+        <Chip key={o.key} label={o.label} on={o.key === value} role="radio" onPress={() => onChange(o.key)} />
+      ))}
     </View>
   );
 }
@@ -166,35 +147,52 @@ export function Toggles<K extends string>({
   values: readonly K[];
   onChange: (values: K[]) => void;
 }) {
-  const { colors } = useTheme();
   return (
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
       {options.map((o) => {
         const on = values.includes(o.key);
         return (
-          <Pressable
+          <Chip
             key={o.key}
+            label={o.label}
+            on={on}
+            role="checkbox"
             onPress={() => onChange(on ? values.filter((v) => v !== o.key) : [...values, o.key])}
-            accessibilityRole="checkbox"
-            aria-checked={on}
-            hitSlop={{ top: 4, bottom: 4 }}
-            style={({ pressed }) => ({
-              paddingHorizontal: 12,
-              height: 36,
-              justifyContent: "center",
-              borderRadius: radii.sm,
-              borderWidth: 1,
-              borderColor: on ? colors.ink : colors.edge,
-              backgroundColor: on ? colors.ink : pressed ? colors.sunk : colors.raised,
-            })}
-          >
-            <T v="meta" style={{ color: on ? colors.onInk : colors.ink2 }}>
-              {o.label}
-            </T>
-          </Pressable>
+          />
         );
       })}
     </View>
+  );
+}
+
+/** One option in Choices or Toggles: sinks when pressed, and the ink fill eases in and out. */
+function Chip({ label, on, role, onPress }: { label: string; on: boolean; role: "radio" | "checkbox"; onPress: () => void }) {
+  const { colors } = useTheme();
+  const fill = useTransition(["backgroundColor", "borderColor"], motion.fast);
+  const ink = useTransition("color", motion.fast);
+  return (
+    <Press
+      onPress={onPress}
+      accessibilityRole={role}
+      aria-checked={on}
+      // 36 visible + 4 above and below = a 44pt target.
+      hitSlop={{ top: 4, bottom: 4 }}
+      scaleTo={0.96}
+      style={[
+        {
+          paddingHorizontal: 12,
+          height: 36,
+          justifyContent: "center",
+          borderRadius: radii.sm,
+          borderWidth: 1,
+          borderColor: on ? colors.ink : colors.edge,
+          backgroundColor: on ? colors.ink : colors.raised,
+        },
+        fill,
+      ]}
+    >
+      <Animated.Text style={[type.meta, { color: on ? colors.onInk : colors.ink2 }, ink]}>{label}</Animated.Text>
+    </Press>
   );
 }
 
@@ -274,6 +272,57 @@ export function Pair({ label, value, strong }: { label: string; value: string; s
       <T v={strong ? "bodyStrong" : "meta"} num>
         {value}
       </T>
+    </View>
+  );
+}
+
+const BREATHE = { from: { opacity: 1 }, to: { opacity: 0.5 } };
+
+/**
+ * A placeholder in the shape of what's loading, breathing gently (still under
+ * Reduce Motion). Wrap a group of them in one view that announces what's loading.
+ */
+export function Skeleton({ width, height, style }: { width?: DimensionValue; height?: DimensionValue; style?: StyleProp<ViewStyle> }) {
+  const { colors } = useTheme();
+  const reduce = useReducedMotion();
+  return (
+    <Animated.View
+      style={[
+        { width, height, borderRadius: radii.sm, backgroundColor: colors.sunk },
+        !reduce && {
+          animationName: BREATHE,
+          animationDuration: 900,
+          animationIterationCount: "infinite",
+          animationDirection: "alternate",
+          animationTimingFunction: "ease-in-out",
+        },
+        style,
+      ]}
+    />
+  );
+}
+
+/**
+ * A thin bar for a share of a whole (budget used, a category, interview
+ * progress). Grows from zero when it appears and eases to each new value.
+ */
+export function Meter({
+  value,
+  color,
+  track,
+  height = 3,
+  delay = 0,
+  ...rest
+}: ViewProps & { value: number; color: string; track?: string; height?: number; delay?: number }) {
+  const target = Math.max(0, Math.min(1, value));
+  const shown = useSharedValue(0);
+  useEffect(() => {
+    shown.value = withDelay(delay, withTiming(target, { duration: motion.slow, easing: settle, reduceMotion: ReduceMotion.System }));
+  }, [target, delay, shown]);
+  const fill = useAnimatedStyle(() => ({ width: `${shown.value * 100}%` }));
+  return (
+    <View {...rest} style={[{ height, backgroundColor: track ?? "transparent", borderRadius: track ? 2 : 0, overflow: "hidden" }, rest.style]}>
+      <Animated.View style={[{ height, backgroundColor: color }, fill]} />
     </View>
   );
 }

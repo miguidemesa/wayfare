@@ -2,10 +2,11 @@ import { useMemo } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { fmtDate, fmtMoney, GUTTER, space, useTheme } from "@/shared/theme";
+import { fmtDate, fmtMoney, GUTTER, motion, space, useTheme } from "@/shared/theme";
 import { byCategory, categoryLabel, dailyAllowance, dayKey, groupByDay, localKey, spentOn, totalSpent, tripPhase } from "@/shared/trip";
 import { useLoadedTrip } from "@/lib/trip";
-import { Empty, Rule, SectionLabel } from "@/components/ui/Primitives";
+import { Empty, Meter, SectionLabel } from "@/components/ui/Primitives";
+import { SpineItem } from "@/components/ui/Spine";
 import { T } from "@/components/ui/T";
 
 export default function SpendScreen() {
@@ -62,9 +63,13 @@ export default function SpendScreen() {
             <T v="meta" c={left < 0 ? "danger" : "ink2"} num style={{ marginTop: 2 }}>
               {left < 0 ? `${fmtMoney(Math.round(-left), home)} over a ${fmtMoney(budget, home)} budget` : `${fmtMoney(Math.round(left), home)} left of ${fmtMoney(budget, home)}`}
             </T>
-            <View style={{ height: 3, backgroundColor: colors.rule, marginTop: space.md, borderRadius: 2, overflow: "hidden" }} accessibilityLabel={`${Math.round(pct * 100)} percent of budget used`}>
-              <View style={{ width: `${Math.min(100, pct * 100)}%`, height: 3, backgroundColor: barColor }} />
-            </View>
+            <Meter
+              value={pct}
+              color={barColor}
+              track={colors.rule}
+              style={{ marginTop: space.md }}
+              accessibilityLabel={`${Math.round(pct * 100)} percent of budget used`}
+            />
           </>
         ) : (
           <T v="meta" c="ink3" style={{ marginTop: 2 }}>
@@ -90,7 +95,7 @@ export default function SpendScreen() {
         <View style={{ paddingHorizontal: GUTTER }}>
           <Empty
             title="Nothing logged yet"
-            body="Log what you spend as you go — in any currency. Totals convert to your home currency automatically."
+            body="Log what you spend as you go, in any currency. Totals convert to your home currency automatically."
             action="Log an expense"
             onAction={() => router.push(`/trips/${tripId}/add-expense`)}
           />
@@ -99,7 +104,7 @@ export default function SpendScreen() {
         <>
           <View style={{ paddingHorizontal: GUTTER, marginTop: space.xl }}>
             <SectionLabel>Where it went</SectionLabel>
-            {cats.map(([cat, amount]) => (
+            {cats.map(([cat, amount], i) => (
               <View key={cat} style={{ paddingVertical: 7 }}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                   <T v="meta">{categoryLabel(cat)}</T>
@@ -111,9 +116,8 @@ export default function SpendScreen() {
                     </T>
                   </T>
                 </View>
-                <View style={{ height: 2, backgroundColor: colors.rule, marginTop: 6 }}>
-                  <View style={{ width: `${(amount / Math.max(cats[0][1], 1)) * 100}%`, height: 2, backgroundColor: colors.ink2 }} />
-                </View>
+                {/* Scaled to the biggest category, so the bars compare with each other. */}
+                <Meter value={amount / Math.max(cats[0][1], 1)} color={colors.ink2} height={2} delay={80 + i * motion.stagger} style={{ marginTop: 6 }} />
               </View>
             ))}
           </View>
@@ -122,49 +126,49 @@ export default function SpendScreen() {
             {groups.map((g) => {
               const n = dayNumber.get(g.key);
               return (
-                <View key={g.key} style={{ marginBottom: space.md }}>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", paddingHorizontal: GUTTER, paddingVertical: space.sm }}>
-                    <T v="entry">
-                      {g.key === today ? "Today" : fmtDate(g.key + "T12:00:00", { weekday: "short", month: "short", day: "numeric" })}
-                      {n ? (
-                        <T v="aside" c="ink3">
-                          {"  "}Day {n}
-                        </T>
-                      ) : null}
-                    </T>
-                    <T v="meta" c="ink2" num>
-                      {fmtMoney(Math.round(g.total), home)}
-                    </T>
-                  </View>
-                  <Rule style={{ marginHorizontal: GUTTER }} />
+                // Each day of spending hangs from the same line as the plan.
+                <View key={g.key}>
+                  <SpineItem
+                    mark={g.key === today ? "now" : "day"}
+                    label={[g.key === today ? "Today" : fmtDate(g.key + "T12:00:00", { weekday: "short", month: "short", day: "numeric" }), n ? `Day ${n}` : null]
+                      .filter(Boolean)
+                      .join(" · ")}
+                    labelColor={g.key === today ? "accent" : "ink3"}
+                    right={
+                      <T v="meta" c="ink2" num>
+                        {fmtMoney(Math.round(g.total), home)}
+                      </T>
+                    }
+                    style={{ paddingBottom: space.xs }}
+                  />
                   {g.items.map((e) => (
-                    <Pressable
+                    <SpineItem
                       key={e.id}
                       onPress={() => router.push({ pathname: "/trips/[tripId]/add-expense", params: { tripId, expenseId: e.id } })}
-                      accessibilityRole="button"
                       accessibilityLabel={`${e.merchant}, ${fmtMoney(e.amount, e.currency)}`}
                       accessibilityHint="Opens it to edit or delete"
-                      style={({ pressed }) => ({ flexDirection: "row", paddingHorizontal: GUTTER, paddingVertical: 11, gap: 12, backgroundColor: pressed ? colors.sunk : "transparent" })}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <T v="bodyStrong" numberOfLines={1}>
-                          {e.merchant}
-                        </T>
-                        <T v="small" c="ink3" numberOfLines={1}>
-                          {[categoryLabel(e.category), e.paymentMethod === "CASH" ? "Cash" : e.paymentMethod ? "Card" : null, e.description].filter(Boolean).join(" · ")}
-                        </T>
-                      </View>
-                      <View style={{ alignItems: "flex-end" }}>
-                        <T v="bodyStrong" num>
-                          {fmtMoney(e.amount, e.currency)}
-                        </T>
-                        {e.currency !== home ? (
-                          <T v="small" c="ink3" num>
-                            {fmtMoney(Math.round(e.amountHome * 100) / 100, home)}
+                      padTop={10}
+                      style={{ paddingBottom: 10 }}
+                      right={
+                        <View style={{ alignItems: "flex-end" }}>
+                          <T v="bodyStrong" num>
+                            {fmtMoney(e.amount, e.currency)}
                           </T>
-                        ) : null}
-                      </View>
-                    </Pressable>
+                          {e.currency !== home ? (
+                            <T v="small" c="ink3" num>
+                              {fmtMoney(Math.round(e.amountHome * 100) / 100, home)}
+                            </T>
+                          ) : null}
+                        </View>
+                      }
+                    >
+                      <T v="bodyStrong" numberOfLines={1}>
+                        {e.merchant}
+                      </T>
+                      <T v="small" c="ink3" numberOfLines={1}>
+                        {[categoryLabel(e.category), e.paymentMethod === "CASH" ? "Cash" : e.paymentMethod ? "Card" : null, e.description].filter(Boolean).join(" · ")}
+                      </T>
+                    </SpineItem>
                   ))}
                 </View>
               );

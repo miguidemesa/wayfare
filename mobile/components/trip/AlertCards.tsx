@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 import { router } from "expo-router";
+import Animated from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { radii, space, useTheme } from "@/shared/theme";
+import { fadeIn, fadeOut, reflow } from "@/lib/motion";
 import type { AlertAction, TripAlert } from "@/shared/alerts";
 import { openDirections } from "@/lib/directions";
 import { T } from "@/components/ui/T";
@@ -57,11 +59,13 @@ export function AlertCards({
         <AlertCard key={a.id} alert={a} onAction={() => runAlertAction(tripId, a.action.to, setDayIndex)} onDismiss={() => onDismiss(a.id)} />
       ))}
       {live.length > shown.length ? (
-        <Pressable onPress={() => setAll(true)} accessibilityRole="button" hitSlop={10} style={{ alignSelf: "flex-start" }}>
-          <T v="meta" c="accent">
-            {live.length - shown.length} more
-          </T>
-        </Pressable>
+        <Animated.View layout={reflow} exiting={fadeOut}>
+          <Pressable onPress={() => setAll(true)} accessibilityRole="button" hitSlop={13} style={{ alignSelf: "flex-start" }}>
+            <T v="meta" c="accent">
+              {live.length - shown.length} more
+            </T>
+          </Pressable>
+        </Animated.View>
       ) : null}
     </View>
   );
@@ -72,7 +76,11 @@ function AlertCard({ alert, onAction, onDismiss }: { alert: TripAlert; onAction:
   const tint = alert.tone === "danger" ? colors.danger : alert.tone === "warning" ? colors.caution : colors.ink2;
   const icon = alert.tone === "info" ? "information-circle-outline" : "alert-circle-outline";
   return (
-    <View
+    // Dismissed, a card fades and the ones below glide up into its place.
+    <Animated.View
+      entering={fadeIn}
+      exiting={fadeOut}
+      layout={reflow}
       accessibilityRole={alert.tone === "danger" ? "alert" : undefined}
       style={{
         flexDirection: "row",
@@ -90,15 +98,21 @@ function AlertCard({ alert, onAction, onDismiss }: { alert: TripAlert; onAction:
         <T v="small" c="ink2">
           {alert.body}
         </T>
-        <Pressable onPress={onAction} accessibilityRole="button" hitSlop={10} style={{ alignSelf: "flex-start", marginTop: 6 }}>
+        <Pressable onPress={onAction} accessibilityRole="button" hitSlop={13} style={({ pressed }) => ({ alignSelf: "flex-start", marginTop: 6, opacity: pressed ? 0.5 : 1 })}>
           <T v="meta" c="accent">
             {alert.action.label}
           </T>
         </Pressable>
       </View>
-      <Pressable onPress={onDismiss} accessibilityRole="button" accessibilityLabel={`Dismiss: ${alert.title}`} hitSlop={12} style={{ padding: 2 }}>
+      <Pressable
+        onPress={onDismiss}
+        accessibilityRole="button"
+        accessibilityLabel={`Dismiss: ${alert.title}`}
+        hitSlop={12}
+        style={({ pressed }) => ({ padding: 2, opacity: pressed ? 0.5 : 1 })}
+      >
         <Ionicons name="close" size={18} color={colors.ink3} />
       </Pressable>
-    </View>
+    </Animated.View>
   );
 }

@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
+import Animated from "react-native-reanimated";
+import { enterUp, fadeOut } from "@/lib/motion";
+import { SpineItem } from "@/components/ui/Spine";
 import { addJournalEntry, ApiError, deleteJournalEntry } from "@/shared/api";
 import { fmtDate, GUTTER, space, useTheme } from "@/shared/theme";
 import { dayKey, localKey } from "@/shared/trip";
@@ -24,7 +27,6 @@ const MOODS = [
 const moodLabel = (k: string | null) => MOODS.find((m) => m.key === k)?.label ?? null;
 
 export default function Journal() {
-  const { colors } = useTheme();
   const toast = useToast();
   const { tripId, bundle, reload } = useTrip();
   const [writing, setWriting] = useState(false);
@@ -50,7 +52,11 @@ export default function Journal() {
 
   return (
     <SubScreen title="Journal" scrollTopWhen={writing} intro="A line or two a day is enough to remember it by." right={!writing ? <Button variant="quiet" label="Write" onPress={() => setWriting(true)} /> : undefined}>
-      {writing ? <Compose onDone={() => setWriting(false)} /> : null}
+      {writing ? (
+        <Animated.View entering={enterUp(0)} exiting={fadeOut}>
+          <Compose onDone={() => setWriting(false)} />
+        </Animated.View>
+      ) : null}
 
       {entries.length === 0 && !writing ? (
         <View style={{ paddingHorizontal: GUTTER }}>
@@ -65,24 +71,29 @@ export default function Journal() {
           photos = (JSON.parse(e.photos || "[]") as unknown[]).length;
         } catch {}
         return (
-          <View key={e.id} style={{ paddingHorizontal: GUTTER, paddingVertical: space.lg, borderTopWidth: 1, borderTopColor: colors.rule }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <T v="label" c="ink3">
-                {fmtDate(e.date, { weekday: "short", month: "short", day: "numeric" })}
-                {n ? ` · Day ${n}` : ""}
-              </T>
-              <Pressable onPress={() => remove(e.id, e.title)} hitSlop={14} accessibilityRole="button" accessibilityLabel={`Delete ${e.title}`}>
+          // Entries hang from the same line as the plan, newest first.
+          <SpineItem
+            key={e.id}
+            mark="stop"
+            label={`${fmtDate(e.date, { weekday: "short", month: "short", day: "numeric" })}${n ? ` · Day ${n}` : ""}`}
+            right={
+              <Pressable
+                onPress={() => remove(e.id, e.title)}
+                hitSlop={14}
+                accessibilityRole="button"
+                accessibilityLabel={`Delete ${e.title}`}
+                style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+              >
                 <T v="small" c="ink3">
                   Delete
                 </T>
               </Pressable>
-            </View>
-            <T v="heading" style={{ marginTop: 6 }}>
-              {e.title}
-            </T>
+            }
+          >
+            <T v="heading">{e.title}</T>
             {e.locationName || moodLabel(e.mood) ? (
               <T v="aside" c="ink2" style={{ marginTop: 2 }}>
-                {[e.locationName, moodLabel(e.mood)].filter(Boolean).join(" — ")}
+                {[e.locationName, moodLabel(e.mood)].filter(Boolean).join(" · ")}
               </T>
             ) : null}
             {e.body ? (
@@ -95,7 +106,7 @@ export default function Journal() {
                 {photos} {photos === 1 ? "photo" : "photos"} (view on the web)
               </T>
             ) : null}
-          </View>
+          </SpineItem>
         );
       })}
     </SubScreen>

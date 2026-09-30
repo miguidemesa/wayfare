@@ -1,6 +1,7 @@
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { radii, useTheme } from "@/shared/theme";
+import { Press } from "./Press";
 import { T } from "./T";
 
 /** A labelled whole number with − and + (travellers, a child's age…). */
@@ -56,25 +57,27 @@ export function Counter({
 function StepButton({ icon, disabled, onPress }: { icon: "add" | "remove"; disabled: boolean; onPress: () => void }) {
   const { colors } = useTheme();
   return (
-    <Pressable
+    <Press
       onPress={onPress}
       disabled={disabled}
       // The row is the accessible control; these are its touch targets.
       importantForAccessibility="no"
       accessibilityElementsHidden
-      style={({ pressed }) => ({
+      scaleTo={0.94}
+      style={{
         width: 44,
         height: 44,
         borderRadius: radii.md,
+        borderCurve: "continuous",
         borderWidth: 1,
         borderColor: colors.edge,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: pressed ? colors.sunk : colors.raised,
+        backgroundColor: colors.raised,
         opacity: disabled ? 0.35 : 1,
-      })}
+      }}
     >
       <Ionicons name={icon} size={20} color={colors.ink} />
-    </Pressable>
+    </Press>
   );
 }

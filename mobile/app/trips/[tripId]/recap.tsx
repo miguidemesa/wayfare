@@ -40,7 +40,7 @@ export default function Recap() {
   ];
 
   return (
-    <SubScreen title="Recap" intro={phase === "after" ? "How it went." : "This fills in as you travel — here's the story so far."}>
+    <SubScreen title="Recap" intro={phase === "after" ? "How it went." : "This fills in as you travel. Here's the story so far."}>
       <View style={{ paddingHorizontal: GUTTER }}>
         {img ? <Image source={{ uri: img.hero }} style={{ width: "100%", aspectRatio: 3 / 2, borderRadius: radii.sm, backgroundColor: colors.sunk }} contentFit="cover" transition={200} cachePolicy="memory-disk" /> : null}
         <T v="display" style={{ marginTop: img ? space.lg : 0 }} accessibilityRole="header">

@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+import Animated from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
+import { fadeIn, pop } from "@/lib/motion";
 import { ApiError, deleteItineraryItem, updateItineraryItem } from "@/shared/api";
 import { fmtClock, fmtDay, fmtDuration, fmtMoney, GUTTER, space, useTheme } from "@/shared/theme";
 import { categoryForItemType, isLocated, ITEM_TYPES, itemTypeLabel, parseClock } from "@/shared/trip";
@@ -28,6 +30,8 @@ function StopDetail() {
   const { itemId } = useLocalSearchParams<{ itemId: string }>();
   const { tripId, bundle, reload, update, setDayIndex, setSelectedItemId } = useLoadedTrip();
   const [mode, setMode] = useState<"view" | "edit" | "move">("view");
+  // Pop the booked mark only when it's tapped, not when the page opens.
+  const [tappedBooked, setTappedBooked] = useState(false);
 
   const dayIdx = bundle.days.findIndex((d) => d.items.some((i) => i.id === itemId));
   const day = bundle.days[dayIdx];
@@ -49,6 +53,7 @@ function StopDetail() {
   const located = isLocated(stop);
 
   async function toggleBooked() {
+    setTappedBooked(true);
     const next = !stop.confirmed;
     update((b) => ({
       ...b,
@@ -87,7 +92,13 @@ function StopDetail() {
     router.navigate(`/trips/${tripId}/map`);
   }
 
-  if (mode === "edit") return <EditStop onDone={() => setMode("view")} />;
+  if (mode === "edit") {
+    return (
+      <Animated.View entering={fadeIn} style={{ flex: 1 }}>
+        <EditStop onDone={() => setMode("view")} />
+      </Animated.View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.paper }}>
@@ -120,9 +131,11 @@ function StopDetail() {
           aria-checked={stop.confirmed}
           style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 10, marginTop: space.lg, paddingVertical: 8, opacity: pressed ? 0.6 : 1 })}
         >
-          <Ionicons name={stop.confirmed ? "checkmark-circle" : "ellipse-outline"} size={22} color={stop.confirmed ? colors.positive : colors.ink3} />
+          <Animated.View key={String(stop.confirmed)} entering={tappedBooked ? pop : undefined}>
+            <Ionicons name={stop.confirmed ? "checkmark-circle" : "ellipse-outline"} size={22} color={stop.confirmed ? colors.positive : colors.ink3} />
+          </Animated.View>
           <T v="body" c={stop.confirmed ? "positive" : "ink2"}>
-            {stop.confirmed ? "Booked" : "Not booked yet — tap when it is"}
+            {stop.confirmed ? "Booked" : "Not booked yet. Tap once it is."}
           </T>
         </Pressable>
 
@@ -144,7 +157,7 @@ function StopDetail() {
 
         <View style={{ marginTop: space.xl }}>
           <Rule />
-          <Action icon="navigate-outline" label="Directions" detail={located ? undefined : "Searches by name — this stop has no pin"} onPress={() => openDirections({ lat: stop.lat, lng: stop.lng, name: stop.placeName || stop.title, city: day.city })} />
+          <Action icon="navigate-outline" label="Directions" detail={located ? undefined : "Searches by name, since this stop has no pin"} onPress={() => openDirections({ lat: stop.lat, lng: stop.lng, name: stop.placeName || stop.title, city: day.city })} />
           <Rule />
           {located ? (
             <>
@@ -164,7 +177,11 @@ function StopDetail() {
           />
           <Rule />
           <Action icon="swap-horizontal-outline" label="Move to another day" onPress={() => setMode(mode === "move" ? "view" : "move")} />
-          {mode === "move" ? <MoveToDay currentDayId={day.id} itemId={stop.id} onMoved={() => setMode("view")} /> : null}
+          {mode === "move" ? (
+            <Animated.View entering={fadeIn}>
+              <MoveToDay currentDayId={day.id} itemId={stop.id} onMoved={() => setMode("view")} />
+            </Animated.View>
+          ) : null}
           <Rule />
           <Action icon="trash-outline" label="Remove from plan" danger onPress={remove} />
           <Rule />

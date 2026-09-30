@@ -39,10 +39,10 @@ export function TripProvider({ tripId, children }: { tripId: string; children: R
   const [bundle, setBundle] = useState<TripBundle | null>(() => bundleCache.get(tripId) ?? null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [dayIndex, setDayIndexState] = useState(0);
+  // null until the traveller picks a day; see `wantedDay` below.
+  const [pickedDay, setPickedDay] = useState<number | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [rates, setRates] = useState<Rates | null>(ratesCache);
-  const placedDay = useRef(false);
   const inflight = useRef<Promise<void> | null>(null);
   const queued = useRef<Promise<void> | null>(null);
   const currentTrip = useRef(tripId);
@@ -88,7 +88,7 @@ export function TripProvider({ tripId, children }: { tripId: string; children: R
   }, [load]);
 
   useEffect(() => {
-    placedDay.current = false;
+    setPickedDay(null);
     setBundle(bundleCache.get(tripId) ?? null);
     // Anything still running belongs to the previous trip.
     inflight.current = null;
@@ -96,16 +96,12 @@ export function TripProvider({ tripId, children }: { tripId: string; children: R
     void reload();
   }, [tripId, reload]);
 
-  // Open on today's day while travelling; otherwise day 1. Only once — after
-  // that the traveller's own choice sticks.
-  useEffect(() => {
-    if (!bundle || placedDay.current) return;
-    placedDay.current = true;
-    setDayIndexState(todayDayIndex(bundle.days) ?? 0);
-  }, [bundle]);
-
+  // Open on today's page while travelling, otherwise day 1, until the
+  // traveller picks a day; their choice sticks. Worked out while rendering,
+  // so the plan never shows day 1 for a moment before jumping to today.
+  const wantedDay = pickedDay ?? (bundle ? (todayDayIndex(bundle.days) ?? 0) : 0);
   const days = bundle?.days.length ?? 0;
-  const safeDay = days === 0 ? 0 : Math.min(dayIndex, days - 1);
+  const safeDay = days === 0 ? 0 : Math.min(wantedDay, days - 1);
 
   const update = useCallback(
     (fn: (b: TripBundle) => TripBundle) =>
@@ -119,7 +115,7 @@ export function TripProvider({ tripId, children }: { tripId: string; children: R
   );
 
   const setDayIndex = useCallback((i: number) => {
-    setDayIndexState(i);
+    setPickedDay(i);
     setSelectedItemId(null);
   }, []);
 

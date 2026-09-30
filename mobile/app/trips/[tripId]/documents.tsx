@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
+import Animated from "react-native-reanimated";
+import { enterUp, fadeOut } from "@/lib/motion";
 import { Ionicons } from "@expo/vector-icons";
 import { addDocumentNote, ApiError, deleteDocument, fetchDocuments } from "@/shared/api";
 import { fmtDate, GUTTER, space, useTheme } from "@/shared/theme";
@@ -80,15 +82,17 @@ export default function Documents() {
       }}
     >
       {adding ? (
-        <AddDoc
-          onDone={(doc) => {
-            setAdding(false);
-            if (doc) {
-              setDocs((xs) => [doc, ...(xs ?? [])]);
-              void reloadTrip();
-            }
-          }}
-        />
+        <Animated.View entering={enterUp(0)} exiting={fadeOut}>
+          <AddDoc
+            onDone={(doc) => {
+              setAdding(false);
+              if (doc) {
+                setDocs((xs) => [doc, ...(xs ?? [])]);
+                void reloadTrip();
+              }
+            }}
+          />
+        </Animated.View>
       ) : null}
 
       {error ? (
@@ -179,7 +183,7 @@ function AddDoc({ onDone }: { onDone: (doc: DocumentFile | null) => void }) {
   return (
     <View style={{ marginHorizontal: GUTTER, marginBottom: space.xl, padding: space.lg, gap: space.lg, borderWidth: 1, borderColor: colors.rule, borderRadius: 8, backgroundColor: colors.raised }}>
       <Choices options={KINDS} value={kind} onChange={setKind} />
-      <Field label="Name" value={name} onChangeText={setName} placeholder="Passport — Maria" />
+      <Field label="Name" value={name} onChangeText={setName} placeholder="Maria's passport" />
       <Field label="Details" value={content} onChangeText={setContent} placeholder="Number, policy, booking code…" multiline style={{ minHeight: 80, textAlignVertical: "top" }} />
       <Pressable onPress={() => setSensitive(!sensitive)} accessibilityRole="checkbox" aria-checked={sensitive} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
         <Ionicons name={sensitive ? "checkbox" : "square-outline"} size={22} color={sensitive ? colors.ink : colors.ink3} />

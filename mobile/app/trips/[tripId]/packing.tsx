@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
+import { fadeIn, fadeOut, pop, reflow } from "@/lib/motion";
 import { addChecklistItem, ApiError, deleteChecklistItem, fetchChecklist, generatePackingList, toggleChecklistItem } from "@/shared/api";
 import { GUTTER, space, useTheme } from "@/shared/theme";
 import type { ChecklistItem } from "@/shared/types";
@@ -33,6 +35,8 @@ export default function Packing() {
   const [adding, setAdding] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  // The one box just ticked or unticked pops; the rest load still.
+  const [touched, setTouched] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -60,6 +64,7 @@ export default function Packing() {
   const done = visible.filter((i) => i.checked).length;
 
   async function toggle(item: ChecklistItem) {
+    setTouched(item.id);
     setItems((xs) => xs?.map((x) => (x.id === item.id ? { ...x, checked: !x.checked } : x)) ?? null);
     try {
       await toggleChecklistItem(tripId, item.id, !item.checked);
@@ -156,22 +161,36 @@ export default function Packing() {
             <View key={cat} style={{ marginBottom: space.lg }}>
               <SectionLabel style={{ paddingHorizontal: GUTTER }}>{cat}</SectionLabel>
               {list.map((i) => (
-                <View key={i.id} style={{ flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: colors.rule, marginHorizontal: GUTTER }}>
+                <Animated.View
+                  key={i.id}
+                  entering={fadeIn}
+                  exiting={fadeOut}
+                  layout={reflow}
+                  style={{ flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: colors.rule, marginHorizontal: GUTTER }}
+                >
                   <Pressable
                     onPress={() => toggle(i)}
                     accessibilityRole="checkbox"
                     aria-checked={i.checked}
                     style={({ pressed }) => ({ flex: 1, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, opacity: pressed ? 0.6 : 1 })}
                   >
-                    <Ionicons name={i.checked ? "checkbox" : "square-outline"} size={22} color={i.checked ? colors.ink3 : colors.ink} />
+                    <Animated.View key={String(i.checked)} entering={touched === i.id ? pop : undefined}>
+                      <Ionicons name={i.checked ? "checkbox" : "square-outline"} size={22} color={i.checked ? colors.ink3 : colors.ink} />
+                    </Animated.View>
                     <T v="body" c={i.checked ? "ink3" : "ink"} style={{ flex: 1, textDecorationLine: i.checked ? "line-through" : "none" }}>
                       {i.text}
                     </T>
                   </Pressable>
-                  <Pressable onPress={() => remove(i)} hitSlop={10} accessibilityRole="button" accessibilityLabel={`Remove ${i.text}`} style={{ padding: 6 }}>
+                  <Pressable
+                    onPress={() => remove(i)}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove ${i.text}`}
+                    style={({ pressed }) => ({ padding: 6, opacity: pressed ? 0.5 : 1 })}
+                  >
                     <Ionicons name="close" size={18} color={colors.ink3} />
                   </Pressable>
-                </View>
+                </Animated.View>
               ))}
             </View>
           ))}

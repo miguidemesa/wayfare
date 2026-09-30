@@ -39,7 +39,7 @@ export function TopBar({
           accessibilityRole="button"
           accessibilityLabel={backLabel ? `Back to ${backLabel}` : "Back"}
           hitSlop={10}
-          style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 2, opacity: pressed ? 0.5 : 1, paddingRight: 8 })}
+          style={({ pressed }) => ({ height: 44, flexDirection: "row", alignItems: "center", gap: 2, opacity: pressed ? 0.5 : 1, paddingRight: 8 })}
         >
           <Ionicons name="chevron-back" size={22} color={colors.ink} />
           {backLabel ? <T v="meta">{backLabel}</T> : null}
@@ -95,7 +95,7 @@ export function SheetBar({
         accessibilityRole="button"
         accessibilityLabel={cancelLabel}
         hitSlop={10}
-        style={({ pressed }) => ({ minWidth: 64, opacity: pressed ? 0.5 : 1 })}
+        style={({ pressed }) => ({ minWidth: 64, height: 44, justifyContent: "center", opacity: pressed ? 0.5 : 1 })}
       >
         <T v="meta" c="ink2">
           {cancelLabel}

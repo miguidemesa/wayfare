@@ -2,9 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import Animated, { FadeIn, LinearTransition, ReduceMotion } from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import { ApiError, layOutDays, MAX_TRIP_DAYS, optimizeDay, reorderDay } from "@/shared/api";
-import { fmtClock, fmtDay, fmtDuration, fmtMoney, GUTTER, space, useTheme } from "@/shared/theme";
+import { fmtClock, fmtDay, fmtDuration, fmtMoney, GUTTER, radii, space, useTheme } from "@/shared/theme";
+import { enterFrom, reflow } from "@/lib/motion";
+import { Press } from "@/components/ui/Press";
+import { SpineItem, type Mark } from "@/components/ui/Spine";
 import { dayKey, dayStats, localKey, missingDays, moveInArray, suggestedStartAfter, transportLabel, tripPhase } from "@/shared/trip";
 import { openDirections } from "@/lib/directions";
 import type { ItineraryDay, ItineraryItem } from "@/shared/types";
@@ -18,8 +21,6 @@ import { Empty, Rule } from "@/components/ui/Primitives";
 import { T } from "@/components/ui/T";
 import { useToast } from "@/components/ui/Toast";
 
-const TIME_COL = 58;
-const layout = LinearTransition.duration(220).reduceMotion(ReduceMotion.System);
 
 export default function PlanScreen() {
   const { colors } = useTheme();
@@ -36,9 +37,15 @@ export default function PlanScreen() {
 
   const day: ItineraryDay | undefined = bundle.days[dayIndex];
 
+  // A new day's page comes in from the side it sits on in the strip. The
+  // page the plan opens on just appears.
+  const shownDay = useRef(dayIndex);
+  const dayEnter = dayIndex === shownDay.current ? undefined : enterFrom(dayIndex > shownDay.current ? 1 : -1);
+
   // A new day starts at the top, out of reorder mode. (changeDay saves a
   // pending order before the day changes, so nothing is lost here.)
   useEffect(() => {
+    shownDay.current = dayIndex;
     scroller.current?.scrollTo({ y: 0, animated: false });
     setReordering(false);
     setDraftOrder(null);
@@ -96,7 +103,7 @@ export default function PlanScreen() {
     try {
       const res = await optimizeDay(tripId, dayKey(day.date), true);
       await reload();
-      toast(res.timeSavedMin ? `Route tidied — about ${res.timeSavedMin} min less travel` : res.summary || "Route tidied");
+      toast(res.timeSavedMin ? `Route tidied. About ${res.timeSavedMin} min less travel` : res.summary || "Route tidied");
     } catch (e) {
       toast(e instanceof ApiError ? e.message : "Couldn't tidy this day. Nothing was changed.", "error");
     } finally {
@@ -139,6 +146,14 @@ export default function PlanScreen() {
   const nowBefore = isToday ? items.findIndex((it) => it.startTime != null && it.startTime > nowMin) : -1;
   const upNext = isToday ? (nowBefore >= 0 ? items[nowBefore] : null) : null;
 
+  // Today, the line shows what's done, what's next and what's to come.
+  function markFor(item: ItineraryItem, i: number): Mark {
+    if (!isToday) return "stop";
+    if (i === nowBefore) return "next";
+    const end = item.endTime ?? (item.startTime != null ? item.startTime + item.durationMin : null);
+    return end != null && end <= nowMin ? "done" : "stop";
+  }
+
   return (
     <View style={{ flex: 1 }}>
       <DayStrip bundle={bundle} value={dayIndex} onChange={(i) => void changeDay(i)} />
@@ -164,7 +179,7 @@ export default function PlanScreen() {
         contentContainerStyle={{ paddingBottom: space.xxxl }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload()} tintColor={colors.ink3} />}
       >
-        <Animated.View key={day.id} entering={FadeIn.duration(180).reduceMotion(ReduceMotion.System)}>
+        <Animated.View key={day.id} entering={dayEnter}>
           {/* What needs attention now, whichever day is open */}
           {!reordering && alerts.some((a) => !dismissed.has(a.id)) ? (
             <View style={{ paddingHorizontal: GUTTER, paddingTop: space.lg }}>
@@ -196,7 +211,7 @@ export default function PlanScreen() {
               <T v="meta" c={weather.rainProb >= 50 ? "caution" : "ink2"} num style={{ marginTop: 4 }}>
                 {Math.round(weather.tempMaxC)}° / {Math.round(weather.tempMinC)}° · {weather.condition}
                 {weather.rainProb >= 30 ? ` · ${Math.round(weather.rainProb)}% chance of rain` : ""}
-                {weather.rainProb >= 50 && stats.stops > 0 ? " — ask for indoor alternatives below" : ""}
+                {weather.rainProb >= 50 && stats.stops > 0 ? ". Ask below for indoor alternatives." : ""}
               </T>
             ) : null}
 
@@ -252,10 +267,11 @@ export default function PlanScreen() {
           ) : (
             <View style={{ paddingTop: space.sm }}>
               {items.map((item, i) => (
-                <Animated.View key={item.id} layout={layout}>
+                <Animated.View key={item.id} layout={reflow}>
                   {i === nowBefore ? <NowLine minutes={nowMin} /> : null}
                   <StopRow
                     item={item}
+                    mark={markFor(item, i)}
                     currency={currency}
                     reordering={reordering}
                     canUp={i > 0}
@@ -268,16 +284,14 @@ export default function PlanScreen() {
               ))}
               {isToday && nowBefore === -1 && items.length > 0 ? <NowLine minutes={nowMin} /> : null}
               {!reordering ? (
-                <Pressable
-                  onPress={() => openAdd()}
-                  accessibilityRole="button"
-                  style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", paddingLeft: GUTTER + TIME_COL, paddingVertical: space.lg, gap: 6, opacity: pressed ? 0.5 : 1 })}
-                >
-                  <Ionicons name="add" size={18} color={colors.accent} />
-                  <T v="bodyStrong" c="accent">
-                    Add a stop
-                  </T>
-                </Pressable>
+                <SpineItem onPress={() => openAdd()} accessibilityLabel="Add a stop" markCenter={11}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Ionicons name="add" size={18} color={colors.accent} />
+                    <T v="bodyStrong" c="accent">
+                      Add a stop
+                    </T>
+                  </View>
+                </SpineItem>
               ) : null}
             </View>
           )}
@@ -285,27 +299,29 @@ export default function PlanScreen() {
           {/* Ask — plain language changes to this day */}
           {!reordering ? (
             <View style={{ paddingHorizontal: GUTTER, marginTop: space.lg }}>
-              <Pressable
+              <Press
                 onPress={() => router.push({ pathname: "/trips/[tripId]/ask", params: { tripId, date: dayKey(day.date) } })}
                 accessibilityRole="button"
                 accessibilityLabel="Ask Wayfare to change this day"
-                style={({ pressed }) => ({
+                scaleTo={0.985}
+                style={{
                   borderWidth: 1,
                   borderColor: colors.rule,
-                  borderRadius: 8,
+                  borderRadius: radii.md,
+                  borderCurve: "continuous",
                   paddingHorizontal: 14,
                   paddingVertical: 14,
-                  backgroundColor: pressed ? colors.sunk : colors.raised,
+                  backgroundColor: colors.raised,
                   flexDirection: "row",
                   alignItems: "center",
                   gap: 10,
-                })}
+                }}
               >
                 <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.ink3} />
                 <T v="body" c="ink3" style={{ flex: 1 }} numberOfLines={1}>
                   Change this day… “make it more relaxed”
                 </T>
-              </Pressable>
+              </Press>
             </View>
           ) : null}
         </Animated.View>
@@ -314,8 +330,10 @@ export default function PlanScreen() {
   );
 }
 
+/** A stop on the day's line: when (small), what (large), then the details. */
 function StopRow({
   item,
+  mark,
   currency,
   reordering,
   canUp,
@@ -324,6 +342,7 @@ function StopRow({
   onPress,
 }: {
   item: ItineraryItem;
+  mark: Mark;
   currency: string;
   reordering: boolean;
   canUp: boolean;
@@ -333,145 +352,139 @@ function StopRow({
 }) {
   const { colors } = useTheme();
   const end = item.endTime ?? (item.startTime != null ? item.startTime + item.durationMin : null);
+  const when = item.startTime != null ? `${fmtClock(item.startTime)}${end != null ? ` – ${fmtClock(end)}` : ""}` : "No set time";
   const meta = [item.neighborhood || item.placeName, fmtDuration(item.durationMin), item.cost ? fmtMoney(Math.round(item.cost), item.currency || currency) : null]
     .filter(Boolean)
     .join(" · ");
 
   return (
-    <Pressable
-      onPress={onPress}
-      disabled={reordering}
-      accessibilityRole="button"
+    <SpineItem
+      mark={mark}
+      label={mark === "next" ? `Next · ${when}` : when}
+      labelColor={mark === "next" ? "accent" : "ink3"}
+      onPress={reordering ? undefined : onPress}
       accessibilityLabel={`${item.startTime != null ? fmtClock(item.startTime) + ", " : ""}${item.title}${item.confirmed ? ", booked" : ""}`}
-      style={({ pressed }) => ({ flexDirection: "row", paddingHorizontal: GUTTER, paddingVertical: space.md, backgroundColor: pressed ? colors.sunk : "transparent" })}
+      style={{ paddingBottom: space.md }}
+      right={
+        reordering ? (
+          <View style={{ alignSelf: "center", gap: 8 }}>
+            <MoveButton icon="chevron-up" disabled={!canUp} onPress={() => onMove(-1)} label={`Move ${item.title} earlier`} />
+            <MoveButton icon="chevron-down" disabled={!canDown} onPress={() => onMove(1)} label={`Move ${item.title} later`} />
+          </View>
+        ) : (
+          <Ionicons name="chevron-forward" size={16} color={colors.ink3} style={{ alignSelf: "center" }} />
+        )
+      }
     >
-      <View style={{ width: TIME_COL, paddingTop: 3 }}>
-        <T v="meta" num>
-          {item.startTime != null ? fmtClock(item.startTime) : "—"}
+      <T v="entry" c={mark === "done" ? "ink2" : "ink"} numberOfLines={2}>
+        {item.title}
+      </T>
+      {meta ? (
+        <T v="meta" c="ink2" num numberOfLines={1}>
+          {meta}
         </T>
-        {end != null && item.startTime != null ? (
-          <T v="small" c="ink3" num>
-            {fmtClock(end)}
-          </T>
-        ) : null}
-      </View>
-      <View style={{ flex: 1, gap: 3 }}>
-        <T v="entry" numberOfLines={2}>
-          {item.title}
+      ) : null}
+      {item.confirmed ? (
+        <T v="label" c="positive" style={{ marginTop: 2 }}>
+          Booked
         </T>
-        {meta ? (
-          <T v="meta" c="ink2" num numberOfLines={1}>
-            {meta}
-          </T>
-        ) : null}
-        {item.confirmed ? (
-          <T v="label" c="positive" style={{ marginTop: 2 }}>
-            Booked
-          </T>
-        ) : null}
-        {item.notes ? (
-          <T v="aside" c="ink3" numberOfLines={1}>
-            {item.notes}
-          </T>
-        ) : null}
-      </View>
-      {reordering ? (
-        <View style={{ justifyContent: "center", gap: 8, marginLeft: 8 }}>
-          <MoveButton icon="chevron-up" disabled={!canUp} onPress={() => onMove(-1)} label={`Move ${item.title} earlier`} />
-          <MoveButton icon="chevron-down" disabled={!canDown} onPress={() => onMove(1)} label={`Move ${item.title} later`} />
-        </View>
-      ) : (
-        <Ionicons name="chevron-forward" size={16} color={colors.ink3} style={{ alignSelf: "center", marginLeft: 8 }} />
-      )}
-    </Pressable>
+      ) : null}
+      {item.notes ? (
+        <T v="aside" c="ink3" numberOfLines={1}>
+          {item.notes}
+        </T>
+      ) : null}
+    </SpineItem>
   );
 }
 
 function MoveButton({ icon, disabled, onPress, label }: { icon: "chevron-up" | "chevron-down"; disabled: boolean; onPress: () => void; label: string }) {
   const { colors } = useTheme();
   return (
-    <Pressable
+    <Press
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
       // 40 visible + 2 above and below = 44pt, without the pair's targets overlapping.
       hitSlop={{ top: 2, bottom: 2, left: 4, right: 4 }}
-      style={({ pressed }) => ({
+      scaleTo={0.92}
+      style={{
         width: 40,
         height: 40,
         borderRadius: 6,
+        borderCurve: "continuous",
         borderWidth: 1,
         borderColor: colors.edge,
         alignItems: "center",
         justifyContent: "center",
-        opacity: disabled ? 0.3 : pressed ? 0.6 : 1,
+        opacity: disabled ? 0.3 : 1,
         backgroundColor: colors.raised,
-      })}
+      }}
     >
       <Ionicons name={icon} size={18} color={colors.ink} />
-    </Pressable>
+    </Press>
   );
 }
 
-/** The travel between two stops — and the place to insert a new one. */
+/** The travel between two stops, along the line — and the place to insert a new one. */
 function Leg({ item, onAdd }: { item: ItineraryItem; onAdd: () => void }) {
   const { colors } = useTheme();
   const text = item.transportMin ? `${fmtDuration(item.transportMin)} ${transportLabel(item.transportMode)}` : null;
   return (
-    <Pressable
+    <SpineItem
       onPress={onAdd}
-      accessibilityRole="button"
       accessibilityLabel={`${text ? text + ". " : ""}Add a stop after ${item.title}`}
-      style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", paddingHorizontal: GUTTER, minHeight: 40, opacity: pressed ? 0.5 : 1 })}
+      padTop={4}
+      style={{ paddingBottom: 8, alignItems: "center" }}
+      right={<Ionicons name="add" size={16} color={colors.ink3} />}
     >
-      <View style={{ width: TIME_COL, alignItems: "flex-start", paddingLeft: 14 }}>
-        <View style={{ width: 1, height: 22, backgroundColor: colors.ruleStrong }} />
-      </View>
-      <T v="aside" c="ink3" style={{ flex: 1 }}>
+      <T v="aside" c="ink3">
         {text ?? " "}
       </T>
-      <Ionicons name="add" size={16} color={colors.ink3} />
-    </Pressable>
+    </SpineItem>
   );
 }
 
+/** Where today is up to: the breathing mark, and an accent rule across. */
 function NowLine({ minutes }: { minutes: number }) {
   const { colors } = useTheme();
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: GUTTER, paddingVertical: 4 }} accessibilityLabel={`Now, ${fmtClock(minutes)}`}>
-      <T v="label" c="accent" num style={{ width: TIME_COL }}>
-        Now
-      </T>
-      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent }} />
-      <View style={{ flex: 1, height: 1, backgroundColor: colors.accent }} />
-    </View>
+    <SpineItem mark="now" markCenter={7} padTop={6} style={{ paddingBottom: 6 }} accessibilityLabel={`Now, ${fmtClock(minutes)}`}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <T v="label" c="accent" num>
+          Now · {fmtClock(minutes)}
+        </T>
+        <View style={{ flex: 1, height: 1, backgroundColor: colors.accent }} />
+      </View>
+    </SpineItem>
   );
 }
 
 function QuickAction({ icon, label, onPress, disabled }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void; disabled?: boolean }) {
   const { colors } = useTheme();
   return (
-    <Pressable
+    <Press
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
-      style={({ pressed }) => ({
+      style={{
         flex: 1,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
         gap: 6,
-        height: 40,
-        borderRadius: 8,
+        height: 44,
+        borderRadius: radii.md,
+        borderCurve: "continuous",
         borderWidth: 1,
         borderColor: colors.rule,
-        backgroundColor: pressed ? colors.sunk : colors.raised,
+        backgroundColor: colors.raised,
         opacity: disabled ? 0.4 : 1,
-      })}
+      }}
     >
       <Ionicons name={icon} size={16} color={colors.ink} />
       <T v="meta">{label}</T>
-    </Pressable>
+    </Press>
   );
 }
