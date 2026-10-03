@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Wayfare
 
-## Getting Started
+An AI travel planner. Plan a trip, get a day-by-day itinerary ordered by location, track the budget in any currency, and keep every booking and document in one place, online or off.
 
-First, run the development server:
+## Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **Itinerary generation** — builds each day's stops from a points-of-interest dataset and orders them by distance using greedy insertion and 2-opt route optimization.
+- **AI travel assistant** — works with OpenAI-compatible, Anthropic, Gemini and Ollama models and uses 14 tools to read and change trip data. Falls back to a built-in rule-based engine when no AI provider is configured.
+- **Budget and expenses** — expense tracking with live currency conversion (cached exchange rates) and charts.
+- **Trip workspace** — itinerary, map, reservations, hotels, documents, packing list, journal, a discover page and an end-of-trip "Wrapped" recap.
+- **Works offline** — a service worker caches the app, and changes made offline are queued and synced when the connection returns.
+- **Mobile app** — a companion React Native (Expo) app with interactive maps and a step-by-step itinerary builder.
+- **Security** — cookie sessions with scrypt password hashing, every query scoped to the trip owner, and rate limits on costly endpoints.
+
+## Tech stack
+
+| Area | Technology |
+|---|---|
+| Web | Next.js 16 (App Router, Server Components), React 19, TypeScript, Tailwind CSS v4 |
+| Data | Prisma ORM, SQLite (dev) |
+| Maps and charts | Leaflet, Recharts |
+| Mobile | React Native, Expo, NativeWind |
+| Tests | Node test runner (planner, currency, notifications, calendar, AI security) |
+
+## Project structure
+
+```
+src/app/       pages and 27 API route handlers
+src/lib/       planner, currency, notifications, auth, AI agent and tools
+prisma/        schema and seed data
+mobile/        Expo app
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Run locally
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+npm run db:migrate
+npm run db:seed
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open http://localhost:3000.
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm test
+npm run typecheck
+```
