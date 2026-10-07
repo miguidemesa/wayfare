@@ -31,6 +31,25 @@ prisma/        schema and seed data
 mobile/        Expo app
 ```
 
+## Configuration
+
+Create a `.env` file in the project root:
+
+```bash
+DATABASE_URL="file:./dev.db"
+```
+
+The app runs without any AI keys, using the built-in rule-based assistant. To use a hosted or local model, set one provider:
+
+| Variable | Purpose |
+|---|---|
+| `AI_PROVIDER` | Optional. Force a provider: `openai`, `openrouter`, `nim`, `anthropic`, `gemini`, `ollama` |
+| `OPENAI_API_KEY`, `OPENAI_BASE_URL` | OpenAI or any OpenAI-compatible endpoint |
+| `ANTHROPIC_API_KEY` | Anthropic |
+| `GEMINI_API_KEY` | Google Gemini |
+| `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | Local models through Ollama |
+| `AI_MODEL` | Optional model override |
+
 ## Run locally
 
 ```bash
