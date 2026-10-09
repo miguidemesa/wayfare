@@ -45,3 +45,23 @@ next-env.d.ts
 /uploads
 *.db
 *.db-journal
+
+# AI assistant config and notes (kept local)
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+PRODUCT.md
+skills-lock.json
+.claude/
+.agents/
+.cursor/
+.cursorrules
+.windsurf/
+.windsurfrules
+.aider*
+.codex/
+.gemini/
+.impeccable/
+.superpowers/
+docs/superpowers/
+.github/copilot-instructions.md
